@@ -1,0 +1,20 @@
+{
+  "name": "vacation-reservation-app",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:web\" \"npm run dev:api\"",
+    "dev:web": "npm run dev -w @vacation/web",
+    "dev:api": "npm run start:dev -w @vacation/api",
+    "build": "npm run build -w @vacation/shared && npm run build -w @vacation/api && npm run build -w @vacation/web",
+    "lint": "npm run lint -w @vacation/api && npm run lint -w @vacation/web",
+    "format": "npm run format -w @vacation/api && npm run format -w @vacation/web"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

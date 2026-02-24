@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  EMPLOYEE
+}
+
+enum VacationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AbsenceType {
+  VACATION
+  SICK
+}
+
+enum NotificationType {
+  VACATION_REQUEST_SUBMITTED
+  VACATION_APPROVED
+  VACATION_REJECTED
+  SICK_LEAVE_ADDED
+  DAILY_DIGEST
+}
+
+model User {
+  id                String            @id @default(cuid())
+  email             String            @unique
+  password          String
+  role              UserRole          @default(EMPLOYEE)
+  firstName         String
+  lastName          String
+  department        String?
+  isActive          Boolean           @default(true)
+  vacationDaysTotal Int               @default(25)
+  vacationDaysUsed  Int               @default(0)
+  requests          VacationRequest[]
+  adminNotifications AdminNotification[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model VacationRequest {
+  id           String         @id @default(cuid())
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startDate    DateTime
+  endDate      DateTime
+  reason       String
+  absenceType  AbsenceType     @default(VACATION)
+  status       VacationStatus @default(PENDING)
+  adminComment String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model AdminNotification {
+  id        String           @id @default(cuid())
+  adminId   String
+  admin     User             @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  metadata  Json?
+  createdAt DateTime         @default(now())
+
+  @@index([adminId, isRead])
+  @@index([createdAt])
+}
