@@ -12,6 +12,7 @@
     "dev:api": "npm run start:dev -w @vacation/api",
     "build": "npm run build -w @vacation/shared && npm run build -w @vacation/api && npm run build -w @vacation/web",
     "lint": "npm run lint -w @vacation/api && npm run lint -w @vacation/web",
+    "test": "npm run test -w @vacation/api",
     "format": "npm run format -w @vacation/api && npm run format -w @vacation/web"
   },
   "devDependencies": {

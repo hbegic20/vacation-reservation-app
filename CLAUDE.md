@@ -55,13 +55,15 @@ npm run prisma:seed -w @vacation/api
 npm run dev                                   # web :3000 + api :4000
 
 npm run lint                                  # both apps
+npm test                                      # api unit + endpoint tests
 cd apps/web && npx tsc --noEmit -p .          # web typecheck
+cd apps/api && npx tsc --noEmit -p .          # api typecheck (includes tests)
 npm run build                                 # shared, api, web
 ```
 
 Seed logins: `admin@company.com` / `admin1234`, `john.employee@company.com` / `employee1234`.
 
-Before reporting a task as done, run lint and the web typecheck and fix any failures; don't silence them. `tsc --noEmit` writes `apps/web/tsconfig.tsbuildinfo`, so delete it afterwards. Do not run `npm run build` while `npm run dev` is running, because both write to `.next`. There are no tests yet. When you add them, test behavior, not implementation.
+Before reporting a task as done, run lint, the tests and the relevant typecheck, and fix any failures; don't silence them. `tsc --noEmit` writes `apps/web/tsconfig.tsbuildinfo`, so delete it afterwards. Do not run `npm run build` while `npm run dev` is running, because both write to `.next`.
 
 The developer often has `npm run dev` running already. Check ports 3000 and 4000 before starting another copy. The Next dev server does not reload `tailwind.config.ts`, so after changing it, ask the developer to restart `npm run dev`; until then, new utility classes are missing from the page.
 
@@ -87,6 +89,15 @@ The developer often has `npm run dev` running already. Check ports 3000 and 4000
 - Don't add a root `loading.tsx`. It turns server-side redirects (307) into browser redirects after a flash of the skeleton.
 - Use the color tokens from `globals.css` / `tailwind.config.ts` (`bg-card`, `text-muted-foreground`, `border-border`, `bg-primary`) and support both light and dark themes. Always pair a status color with a text label.
 - Accessibility: semantic HTML, real buttons and links, visible focus, 4.5:1 text contrast, touch targets of at least 44px, `aria-current` on the active nav item.
+
+## Testing
+
+- API tests use Jest. Unit tests sit next to each service (`src/**/*.service.spec.ts`); endpoint tests live in `apps/api/test/*.e2e-spec.ts` and boot the real `AppModule` with `configureApp()`, so guards, DTO validation and the `/api` prefix behave as in production.
+- Test behavior, not implementation. Every service change gets a unit test; every endpoint gets at least a happy path and a validation-failure test, plus 401/403 where guards apply.
+- Never hit a real database or network. Prisma is replaced by `test/prisma-mock.ts` (endpoint tests call `resetPrismaMock()` in `beforeEach`), `fetch` is stubbed to fail in `test/setup-env.ts`, and Slack/Resend settings are blanked there.
+- Tests run in `America/Los_Angeles` (set in `test/global-setup.ts`, not `setupFiles`, because Jest sandboxes `process.env` per file). Keep it non-UTC so date bugs surface.
+- Build request bodies with `test/fixtures.ts` helpers. Use dates that are meaningful in UTC (e.g. 2026-03-09 is a Monday).
+- The web app has no tests yet.
 
 ## Code style
 

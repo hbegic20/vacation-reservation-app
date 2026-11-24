@@ -49,6 +49,7 @@ export class VacationsController {
   }
 
   @Get("approved")
+  @Roles(UserRole.ADMIN)
   listApproved() {
     return this.vacationsService.listApproved();
   }

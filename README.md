@@ -74,7 +74,7 @@ All routes are prefixed with `/api` by Nest.
 - `GET /api/me`
 - `POST /api/vacations`
 - `GET /api/vacations`
-- `GET /api/vacations/approved`
+- `GET /api/vacations/approved` (admin only)
 - `GET /api/vacations/summary`
 - `PATCH /api/vacations/:id/approve`
 - `PATCH /api/vacations/:id/reject`
@@ -137,6 +137,12 @@ npm run dev
 - Web: `http://localhost:3000`
 - API: `http://localhost:4000/api`
 
+## Tests
+```bash
+npm test
+```
+Runs the API unit tests (services) and endpoint tests (controllers, guards and validation) with Jest. They use a mocked Prisma client and never touch a database or the network.
+
 ## Seed Credentials
 - Admin: `admin@company.com` / `admin1234`
 - Admin 2: `operations.admin@company.com` / `admin1234`
@@ -152,6 +158,6 @@ npm run dev
 ## Production Hardening Checklist
 - Rotate `JWT_SECRET` and store in secret manager
 - Add refresh-token flow and token revocation strategy
-- Add unit/integration tests for services and guards
+- Add web tests and run tests in CI
 - Add request rate limiting and structured logging
 - Add CI/CD pipeline and migration gating
