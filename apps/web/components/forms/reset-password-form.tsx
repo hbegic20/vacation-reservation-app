@@ -3,6 +3,8 @@
 import { useFormState, useFormStatus } from 'react-dom';
 import { resetEmployeePasswordAction } from '@/app/actions';
 import { Button } from '../ui/button';
+import { Field } from '../ui/field';
+import { FormMessage } from '../ui/form-message';
 import { Input } from '../ui/input';
 import { useResetOnSuccess } from './use-reset-on-success';
 
@@ -12,7 +14,7 @@ function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" variant="secondary" disabled={pending}>
-      {pending ? 'Resetting...' : 'Reset Password'}
+      {pending ? 'Resetting...' : 'Reset password'}
     </Button>
   );
 }
@@ -22,15 +24,19 @@ export function ResetPasswordForm({ employeeId }: { employeeId: string }) {
   const formRef = useResetOnSuccess(state);
 
   return (
-    <form ref={formRef} action={formAction} className="space-y-3">
+    <form ref={formRef} action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="employeeId" value={employeeId} />
-      <div className="space-y-2">
-        <label htmlFor="employee-new-password" className="text-sm font-medium">New Temporary Password</label>
-        <Input id="employee-new-password" name="newPassword" minLength={8} required placeholder="Minimum 8 characters" />
+      <Field
+        id="employee-new-password"
+        label="New temporary password"
+        hint="At least 8 characters. The old password stops working right away."
+      >
+        <Input id="employee-new-password" name="newPassword" autoComplete="off" minLength={8} required />
+      </Field>
+      <FormMessage state={state} successText="Password reset. Share the new one with the employee." />
+      <div>
+        <SubmitButton />
       </div>
-      {state.error ? <p className="text-sm text-red-600">{state.error}</p> : null}
-      {state.success ? <p className="text-sm text-emerald-600">Password reset successful.</p> : null}
-      <SubmitButton />
     </form>
   );
 }

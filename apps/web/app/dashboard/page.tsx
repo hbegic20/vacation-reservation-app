@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { AdminDashboard } from '@/components/dashboard/admin-dashboard';
 import { EmployeeDashboard } from '@/components/dashboard/employee-dashboard';
-import { TopNav } from '@/components/layout/top-nav';
+import { PageShell } from '@/components/layout/page-shell';
 import {
   fetchAdminNotifications,
   fetchAdminUnreadNotificationCount,
@@ -19,16 +19,13 @@ export default async function DashboardPage() {
   const token = requireToken();
 
   return (
-    <div>
-      <TopNav user={user} />
-      <main className="mx-auto max-w-6xl px-4 pb-14 pt-9 md:px-6">
-        {user.role === 'ADMIN' ? (
-          <AdminDashboardSection token={token} />
-        ) : (
-          <EmployeeDashboardSection user={user} token={token} />
-        )}
-      </main>
-    </div>
+    <PageShell user={user}>
+      {user.role === 'ADMIN' ? (
+        <AdminDashboardSection token={token} />
+      ) : (
+        <EmployeeDashboardSection user={user} token={token} />
+      )}
+    </PageShell>
   );
 }
 

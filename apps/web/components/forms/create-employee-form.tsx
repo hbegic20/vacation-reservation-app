@@ -3,6 +3,8 @@
 import { useFormState, useFormStatus } from 'react-dom';
 import { createEmployeeAction } from '@/app/actions';
 import { Button } from '../ui/button';
+import { Field } from '../ui/field';
+import { FormMessage } from '../ui/form-message';
 import { Input } from '../ui/input';
 import { useResetOnSuccess } from './use-reset-on-success';
 
@@ -11,8 +13,8 @@ const initialState = { success: false, error: null as string | null };
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending}>
-      {pending ? 'Creating...' : 'Create Employee'}
+    <Button type="submit" disabled={pending} className="min-h-12 px-6 text-[15px]">
+      {pending ? 'Creating...' : 'Create account'}
     </Button>
   );
 }
@@ -22,65 +24,37 @@ export function CreateEmployeeForm() {
   const formRef = useResetOnSuccess(state);
 
   return (
-    <form ref={formRef} action={formAction} className="space-y-4">
+    <form ref={formRef} action={formAction} className="flex flex-col gap-5">
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="firstName">
-            First Name
-          </label>
-          <Input id="firstName" name="firstName" type="text" required />
-        </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="lastName">
-            Last Name
-          </label>
-          <Input id="lastName" name="lastName" type="text" required />
-        </div>
+        <Field id="firstName" label="First name">
+          <Input id="firstName" name="firstName" type="text" autoComplete="off" required />
+        </Field>
+        <Field id="lastName" label="Last name">
+          <Input id="lastName" name="lastName" type="text" autoComplete="off" required />
+        </Field>
       </div>
-      <div className="space-y-2">
-        <label className="text-sm font-medium" htmlFor="email">
-          Employee Email
-        </label>
-        <Input id="email" name="email" type="email" required placeholder="employee@company.com" />
+      <Field id="email" label="Work email">
+        <Input id="email" name="email" type="email" autoComplete="off" required placeholder="name@company.com" />
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field id="department" label="Department" hint="Optional">
+          <Input id="department" name="department" type="text" placeholder="Engineering" />
+        </Field>
+        <Field id="vacationDaysTotal" label="Vacation days per year">
+          <Input id="vacationDaysTotal" name="vacationDaysTotal" type="number" required min={1} max={365} defaultValue={25} />
+        </Field>
       </div>
-      <div className="space-y-2">
-        <label className="text-sm font-medium" htmlFor="department">
-          Department
-        </label>
-        <Input id="department" name="department" type="text" placeholder="Engineering" />
+      <Field
+        id="temporaryPassword"
+        label="Temporary password"
+        hint="At least 8 characters. Share it with the employee so they can sign in."
+      >
+        <Input id="temporaryPassword" name="temporaryPassword" type="text" autoComplete="off" required minLength={8} />
+      </Field>
+      <FormMessage state={state} successText="Account created. You can add another one." />
+      <div>
+        <SubmitButton />
       </div>
-      <div className="space-y-2">
-        <label className="text-sm font-medium" htmlFor="temporaryPassword">
-          Temporary Password
-        </label>
-        <Input
-          id="temporaryPassword"
-          name="temporaryPassword"
-          type="text"
-          required
-          minLength={8}
-          placeholder="Minimum 8 characters"
-        />
-      </div>
-      <div className="space-y-2">
-        <label className="text-sm font-medium" htmlFor="vacationDaysTotal">
-          Total Vacation Days
-        </label>
-        <Input
-          id="vacationDaysTotal"
-          name="vacationDaysTotal"
-          type="number"
-          required
-          min={1}
-          max={365}
-          defaultValue={25}
-        />
-      </div>
-
-      {state.error ? <p className="text-sm text-red-600">{state.error}</p> : null}
-      {state.success ? <p className="text-sm text-emerald-600">Employee account created.</p> : null}
-
-      <SubmitButton />
     </form>
   );
 }

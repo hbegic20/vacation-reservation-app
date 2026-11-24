@@ -1,9 +1,14 @@
-import { TopNav } from '@/components/layout/top-nav';
+import type { Metadata } from 'next';
 import { CreateAdminForm } from '@/components/forms/create-admin-form';
-import { Card } from '@/components/ui/card';
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
+import { Avatar } from '@/components/ui/avatar';
 import { fetchAdmins } from '@/lib/api';
 import { requireAdmin, requireToken } from '@/lib/auth';
 import { formatDate } from '@/lib/dates';
+import { plural } from '@/lib/people';
+
+export const metadata: Metadata = { title: 'Admins' };
 
 export default async function AdminsPage() {
   const user = await requireAdmin();
@@ -11,34 +16,47 @@ export default async function AdminsPage() {
   const admins = await fetchAdmins(token);
 
   return (
-    <div>
-      <TopNav user={user} />
-      <main className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
-        <h1 className="text-2xl font-bold">Admins</h1>
-
-        <Card className="space-y-4">
-          <h2 className="text-lg font-semibold">Add New Admin</h2>
-          <CreateAdminForm />
-        </Card>
-
-        <Card className="space-y-3">
-          <h2 className="text-lg font-semibold">Current Admins</h2>
-          <div className="grid gap-3">
+    <PageShell user={user}>
+      <PageHeader
+        title="Admins"
+        description="Admins can approve requests, manage employees and record sick leave."
+      />
+      <div className="flex flex-wrap items-start gap-5">
+        <section
+          aria-labelledby="current-admins-title"
+          className="min-w-0 flex-[999_1_480px] overflow-hidden rounded-2xl border border-border bg-card"
+        >
+          <h2 id="current-admins-title" className="border-b border-border px-6 py-5 font-display text-[17px] font-semibold">
+            {plural(admins.length, 'admin')}
+          </h2>
+          <ul>
             {admins.map((admin) => (
-              <div key={admin.id} className="rounded-xl bg-muted p-3 text-sm">
-                <p className="font-semibold">
-                  {admin.firstName} {admin.lastName}
+              <li key={admin.id} className="flex flex-wrap items-center gap-3 border-b border-border px-6 py-4 last:border-b-0">
+                <Avatar firstName={admin.firstName} lastName={admin.lastName} seed={admin.id} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">
+                    {admin.firstName} {admin.lastName}
+                    {admin.id === user.id ? <span className="font-normal text-muted-foreground"> (you)</span> : null}
+                  </p>
+                  <p className="truncate text-[13px] text-muted-foreground">{admin.email}</p>
+                </div>
+                <p className="text-[13px] text-muted-foreground">
+                  {admin.department ? `${admin.department} · ` : ''}Added {formatDate(admin.createdAt)}
                 </p>
-                <p className="text-muted-foreground">{admin.email}</p>
-                <p className="text-xs text-muted-foreground">
-                  {admin.department || 'No department'} · Added{' '}
-                  {formatDate(admin.createdAt)}
-                </p>
-              </div>
+              </li>
             ))}
-          </div>
-        </Card>
-      </main>
-    </div>
+          </ul>
+        </section>
+        <section
+          aria-labelledby="add-admin-title"
+          className="flex flex-[1_1_340px] flex-col gap-4 rounded-2xl border border-border bg-card p-6"
+        >
+          <h2 id="add-admin-title" className="font-display text-[17px] font-semibold">
+            Add an admin
+          </h2>
+          <CreateAdminForm />
+        </section>
+      </div>
+    </PageShell>
   );
 }

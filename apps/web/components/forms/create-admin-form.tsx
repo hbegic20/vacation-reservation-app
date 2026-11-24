@@ -3,6 +3,8 @@
 import { useFormState, useFormStatus } from 'react-dom';
 import { createAdminAction } from '@/app/actions';
 import { Button } from '../ui/button';
+import { Field } from '../ui/field';
+import { FormMessage } from '../ui/form-message';
 import { Input } from '../ui/input';
 import { useResetOnSuccess } from './use-reset-on-success';
 
@@ -12,7 +14,7 @@ function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" disabled={pending}>
-      {pending ? 'Creating...' : 'Create Admin'}
+      {pending ? 'Adding...' : 'Add admin'}
     </Button>
   );
 }
@@ -22,32 +24,28 @@ export function CreateAdminForm() {
   const formRef = useResetOnSuccess(state);
 
   return (
-    <form ref={formRef} action={formAction} className="space-y-4">
+    <form ref={formRef} action={formAction} className="flex flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <label htmlFor="admin-first-name" className="text-sm font-medium">First Name</label>
-          <Input id="admin-first-name" name="firstName" required />
-        </div>
-        <div className="space-y-2">
-          <label htmlFor="admin-last-name" className="text-sm font-medium">Last Name</label>
-          <Input id="admin-last-name" name="lastName" required />
-        </div>
+        <Field id="admin-first-name" label="First name">
+          <Input id="admin-first-name" name="firstName" autoComplete="off" required />
+        </Field>
+        <Field id="admin-last-name" label="Last name">
+          <Input id="admin-last-name" name="lastName" autoComplete="off" required />
+        </Field>
       </div>
-      <div className="space-y-2">
-        <label htmlFor="admin-email" className="text-sm font-medium">Email</label>
-        <Input id="admin-email" name="email" type="email" required />
-      </div>
-      <div className="space-y-2">
-        <label htmlFor="admin-department" className="text-sm font-medium">Department</label>
+      <Field id="admin-email" label="Work email">
+        <Input id="admin-email" name="email" type="email" autoComplete="off" required />
+      </Field>
+      <Field id="admin-department" label="Department" hint="Optional">
         <Input id="admin-department" name="department" placeholder="Operations" />
+      </Field>
+      <Field id="admin-password" label="Password" hint="At least 8 characters.">
+        <Input id="admin-password" name="password" type="password" autoComplete="new-password" minLength={8} required />
+      </Field>
+      <FormMessage state={state} successText="Admin added." />
+      <div>
+        <SubmitButton />
       </div>
-      <div className="space-y-2">
-        <label htmlFor="admin-password" className="text-sm font-medium">Password</label>
-        <Input id="admin-password" name="password" type="password" minLength={8} required />
-      </div>
-      {state.error ? <p className="text-sm text-red-600">{state.error}</p> : null}
-      {state.success ? <p className="text-sm text-emerald-600">Admin account created.</p> : null}
-      <SubmitButton />
     </form>
   );
 }

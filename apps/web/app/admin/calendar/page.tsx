@@ -1,10 +1,18 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { TopNav } from '@/components/layout/top-nav';
 import { YearVacationCalendar } from '@/components/calendar/year-vacation-calendar';
 import { CreateSickLeaveForm } from '@/components/forms/create-sick-leave-form';
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
 import { buttonStyles } from '@/components/ui/button';
+import { todayKey } from '@/lib/absences';
 import { fetchEmployees, fetchVacationCalendar } from '@/lib/api';
 import { requireAdmin, requireToken } from '@/lib/auth';
+
+export const metadata: Metadata = { title: 'Calendar' };
+
+const minYear = 2000;
+const maxYear = 2100;
 
 interface AdminCalendarPageProps {
   searchParams: {
@@ -12,47 +20,82 @@ interface AdminCalendarPageProps {
   };
 }
 
+function parseYear(value: string | undefined, currentYear: number): number {
+  const requestedYear = Number(value ?? currentYear);
+  return Number.isInteger(requestedYear) && requestedYear >= minYear && requestedYear <= maxYear
+    ? requestedYear
+    : currentYear;
+}
+
+function LegendItem({ swatchClassName, label }: { swatchClassName: string; label: string }) {
+  return (
+    <li className="inline-flex items-center gap-2">
+      <span aria-hidden="true" className={`h-4 w-4 rounded ${swatchClassName}`} />
+      {label}
+    </li>
+  );
+}
+
 export default async function AdminCalendarPage({ searchParams }: AdminCalendarPageProps) {
   const user = await requireAdmin();
   const token = requireToken();
-  const currentYear = new Date().getFullYear();
-  const requestedYear = Number(searchParams.year || currentYear);
-  const year =
-    Number.isInteger(requestedYear) && requestedYear >= 2000 && requestedYear <= 2100
-      ? requestedYear
-      : currentYear;
-  const [data, employees] = await Promise.all([
-    fetchVacationCalendar(token, year),
-    fetchEmployees(token)
-  ]);
+  const today = todayKey();
+  const currentYear = Number(today.slice(0, 4));
+  const year = parseYear(searchParams.year, currentYear);
+  const [days, employees] = await Promise.all([fetchVacationCalendar(token, year), fetchEmployees(token)]);
 
   return (
-    <div>
-      <TopNav user={user} />
-      <main className="mx-auto max-w-7xl space-y-4 p-4 md:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-2xl font-bold">Company Calendar ({year})</h1>
-          <div className="flex gap-2">
-            <Link href={`/admin/calendar?year=${year - 1}`} className={buttonStyles('secondary')}>
-              Previous Year
-            </Link>
-            <Link href={`/admin/calendar?year=${year + 1}`} className={buttonStyles('secondary')}>
-              Next Year
-            </Link>
-          </div>
-        </div>
+    <PageShell user={user} width="full">
+      <PageHeader
+        title={`Company calendar ${year}`}
+        description="Choose a highlighted day to see who is off."
+        actions={
+          <nav aria-label="Change year" className="flex flex-wrap gap-2">
+            {year > minYear ? (
+              <Link href={`/admin/calendar?year=${year - 1}`} className={buttonStyles('secondary')}>
+                ← {year - 1}
+              </Link>
+            ) : null}
+            {year !== currentYear ? (
+              <Link href="/admin/calendar" className={buttonStyles('secondary')}>
+                This year
+              </Link>
+            ) : null}
+            {year < maxYear ? (
+              <Link href={`/admin/calendar?year=${year + 1}`} className={buttonStyles('secondary')}>
+                {year + 1} →
+              </Link>
+            ) : null}
+          </nav>
+        }
+      />
 
-        <div className="flex flex-wrap gap-2 text-xs">
-          <span className="rounded-md bg-sky-200 px-2 py-1 dark:bg-sky-900/60">Sick</span>
-          <span className="rounded-md bg-emerald-200 px-2 py-1 dark:bg-emerald-900/60">Approved</span>
-          <span className="rounded-md bg-amber-200 px-2 py-1 dark:bg-amber-900/60">Pending</span>
-          <span className="rounded-md bg-rose-200 px-2 py-1 dark:bg-rose-900/60">Rejected</span>
-        </div>
+      <ul aria-label="Legend" className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+        <LegendItem swatchClassName="bg-primary" label="Approved vacation" />
+        <LegendItem swatchClassName="border-2 border-dashed border-warning bg-warning-soft" label="Pending" />
+        <LegendItem swatchClassName="bg-sick-soft ring-1 ring-inset ring-sick" label="Sick leave" />
+        <LegendItem swatchClassName="ring-2 ring-inset ring-primary" label="Today" />
+        <li className="text-muted-foreground">A number on a day means several people are off.</li>
+      </ul>
 
-        <CreateSickLeaveForm employees={employees} />
-
-        <YearVacationCalendar year={year} days={data} />
-      </main>
-    </div>
+      <YearVacationCalendar
+        year={year}
+        today={today}
+        days={days}
+        sidePanelFooter={
+          <details className="group rounded-2xl border border-border bg-card">
+            <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 font-display text-[17px] font-semibold [&::-webkit-details-marker]:hidden">
+              Record sick leave
+              <span aria-hidden="true" className="text-muted-foreground transition-transform group-open:rotate-180">
+                ▾
+              </span>
+            </summary>
+            <div className="border-t border-border p-5">
+              <CreateSickLeaveForm employees={employees} />
+            </div>
+          </details>
+        }
+      />
+    </PageShell>
   );
 }

@@ -3,6 +3,8 @@
 import { useFormState, useFormStatus } from 'react-dom';
 import { loginAction } from '@/app/actions';
 import { Button } from '../ui/button';
+import { Field } from '../ui/field';
+import { FormMessage } from '../ui/form-message';
 import { Input } from '../ui/input';
 
 const initialState = { error: '' };
@@ -10,7 +12,7 @@ const initialState = { error: '' };
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" className="w-full" disabled={pending}>
+    <Button type="submit" className="min-h-12 w-full text-[15px]" disabled={pending}>
       {pending ? 'Signing in...' : 'Sign in'}
     </Button>
   );
@@ -20,20 +22,14 @@ export function LoginForm() {
   const [state, formAction] = useFormState(loginAction, initialState);
 
   return (
-    <form action={formAction} className="space-y-4">
-      <div className="space-y-2">
-        <label className="text-sm font-medium" htmlFor="email">
-          Email
-        </label>
-        <Input id="email" name="email" type="email" required placeholder="you@company.com" />
-      </div>
-      <div className="space-y-2">
-        <label className="text-sm font-medium" htmlFor="password">
-          Password
-        </label>
-        <Input id="password" name="password" type="password" required minLength={6} />
-      </div>
-      {state?.error ? <p className="text-sm text-red-600">{state.error}</p> : null}
+    <form action={formAction} className="flex flex-col gap-4">
+      <Field id="email" label="Work email">
+        <Input id="email" name="email" type="email" autoComplete="email" required placeholder="you@company.com" />
+      </Field>
+      <Field id="password" label="Password">
+        <Input id="password" name="password" type="password" autoComplete="current-password" required minLength={6} />
+      </Field>
+      <FormMessage state={state} />
       <SubmitButton />
     </form>
   );

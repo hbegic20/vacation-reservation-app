@@ -4,7 +4,10 @@ import { EmployeeListItem } from '@vacation/shared';
 import { useFormState, useFormStatus } from 'react-dom';
 import { createSickLeaveAction } from '@/app/actions';
 import { Button } from '../ui/button';
+import { Field } from '../ui/field';
+import { FormMessage } from '../ui/form-message';
 import { Input } from '../ui/input';
+import { Select } from '../ui/select';
 import { Textarea } from '../ui/textarea';
 import { useResetOnSuccess } from './use-reset-on-success';
 
@@ -13,8 +16,8 @@ const initialState = { success: false, error: null as string | null };
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" variant="secondary" disabled={pending}>
-      {pending ? 'Saving...' : 'Add Sick Leave'}
+    <Button type="submit" disabled={pending}>
+      {pending ? 'Saving...' : 'Record sick leave'}
     </Button>
   );
 }
@@ -22,50 +25,41 @@ function SubmitButton() {
 export function CreateSickLeaveForm({ employees }: { employees: EmployeeListItem[] }) {
   const [state, formAction] = useFormState(createSickLeaveAction, initialState);
   const formRef = useResetOnSuccess(state);
+  const activeEmployees = employees.filter((employee) => employee.isActive);
 
   return (
-    <form ref={formRef} action={formAction} className="space-y-3 rounded-2xl border border-border bg-card p-4">
-      <h3 className="text-sm font-semibold">Mark Sick Leave (Admin)</h3>
-      <div className="space-y-2">
-        <label htmlFor="sick-leave-employee" className="text-xs text-muted-foreground">Employee</label>
-        <select
-          id="sick-leave-employee"
-          name="userId"
-          className="w-full rounded-xl border border-border bg-transparent px-3 py-2 text-sm"
-          required
-          defaultValue=""
-        >
+    <form ref={formRef} action={formAction} className="flex flex-col gap-4">
+      <Field id="sick-leave-employee" label="Employee">
+        <Select id="sick-leave-employee" name="userId" required defaultValue="" className="w-full">
           <option value="" disabled>
-            Select employee
+            Choose an employee
           </option>
-          {employees.map((employee) => (
+          {activeEmployees.map((employee) => (
             <option key={employee.id} value={employee.id}>
-              {employee.firstName} {employee.lastName} ({employee.email})
+              {employee.firstName} {employee.lastName}
+              {employee.department ? ` · ${employee.department}` : ''}
             </option>
           ))}
-        </select>
-      </div>
+        </Select>
+      </Field>
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-2">
-          <label htmlFor="sick-leave-start" className="text-xs text-muted-foreground">Start</label>
+        <Field id="sick-leave-start" label="First day">
           <Input id="sick-leave-start" name="startDate" type="date" required />
-        </div>
-        <div className="space-y-2">
-          <label htmlFor="sick-leave-end" className="text-xs text-muted-foreground">End</label>
+        </Field>
+        <Field id="sick-leave-end" label="Last day">
           <Input id="sick-leave-end" name="endDate" type="date" required />
-        </div>
+        </Field>
       </div>
-      <div className="space-y-2">
-        <label htmlFor="sick-leave-reason" className="text-xs text-muted-foreground">Reason</label>
-        <Textarea id="sick-leave-reason" name="reason" rows={2} required placeholder="Fever / doctor advised rest" />
+      <Field id="sick-leave-reason" label="Reason">
+        <Textarea id="sick-leave-reason" name="reason" rows={2} required placeholder="Doctor advised rest" />
+      </Field>
+      <Field id="sick-leave-comment" label="Admin note" hint="Optional. Shown to the employee.">
+        <Textarea id="sick-leave-comment" name="adminComment" rows={2} placeholder="Medical note received" />
+      </Field>
+      <FormMessage state={state} successText="Sick leave recorded." />
+      <div>
+        <SubmitButton />
       </div>
-      <div className="space-y-2">
-        <label htmlFor="sick-leave-comment" className="text-xs text-muted-foreground">Admin Comment (optional)</label>
-        <Textarea id="sick-leave-comment" name="adminComment" rows={2} placeholder="Attachment verified" />
-      </div>
-      {state.error ? <p className="text-sm text-red-600">{state.error}</p> : null}
-      {state.success ? <p className="text-sm text-emerald-600">Sick leave recorded.</p> : null}
-      <SubmitButton />
     </form>
   );
 }

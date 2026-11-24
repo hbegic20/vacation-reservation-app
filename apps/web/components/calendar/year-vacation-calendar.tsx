@@ -1,151 +1,230 @@
 'use client';
 
-import { VacationCalendarDay } from '@vacation/shared';
-import {
-  eachDayOfInterval,
-  endOfMonth,
-  endOfWeek,
-  format,
-  isSameMonth,
-  startOfMonth,
-  startOfWeek
-} from 'date-fns';
-import { useMemo, useState } from 'react';
-import { formatDateRange, formatLongDate, localDateKey } from '@/lib/dates';
+import { VacationCalendarDay, VacationCalendarRequestItem } from '@vacation/shared';
+import { ReactNode, useMemo, useRef, useState } from 'react';
+import { StatusBadge } from '@/components/ui/badge';
+import { countWorkingDays, formatDateRange, formatLongDate } from '@/lib/dates';
 import { absenceTypeLabels, statusLabels } from '@/lib/labels';
+import { plural } from '@/lib/people';
+import { cn } from '@/lib/utils';
 
-interface YearVacationCalendarProps {
+type DayRequests = VacationCalendarRequestItem[];
+
+const weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const monthFormatter = new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' });
+
+interface CalendarCell {
+  key: string;
+  day: number;
+  isWeekend: boolean;
+}
+
+function monthCells(year: number, monthIndex: number): (CalendarCell | null)[] {
+  const first = new Date(Date.UTC(year, monthIndex, 1));
+  const daysInMonth = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+  const leadingBlanks = (first.getUTCDay() + 6) % 7;
+  const cells: (CalendarCell | null)[] = Array.from({ length: leadingBlanks }, () => null);
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = new Date(Date.UTC(year, monthIndex, day));
+    const weekday = date.getUTCDay();
+    cells.push({ key: date.toISOString().slice(0, 10), day, isWeekend: weekday === 0 || weekday === 6 });
+  }
+  return cells;
+}
+
+function activeRequests(requests: DayRequests): DayRequests {
+  return requests.filter((request) => request.status !== 'REJECTED');
+}
+
+function cellTone(requests: DayRequests): string {
+  const active = activeRequests(requests);
+  if (active.some((request) => request.absenceType === 'SICK')) {
+    return 'bg-sick-soft text-sick ring-1 ring-inset ring-sick';
+  }
+  if (active.some((request) => request.status === 'PENDING')) {
+    return 'border-2 border-dashed border-warning bg-warning-soft text-warning';
+  }
+  if (active.length > 0) {
+    return 'bg-primary text-white';
+  }
+  return 'text-muted-foreground underline decoration-dotted underline-offset-2';
+}
+
+function describeDay(key: string, requests: DayRequests): string {
+  const counts = new Map<string, number>();
+  requests.forEach((request) => {
+    const label = request.absenceType === 'SICK' ? 'sick' : statusLabels[request.status].toLowerCase();
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  });
+  const parts = Array.from(counts, ([label, count]) => `${count} ${label}`);
+  return `${formatLongDate(key)}: ${parts.join(', ')}`;
+}
+
+function initialSelection(days: VacationCalendarDay[], today: string): string | null {
+  const todayEntry = days.find((entry) => entry.date === today);
+  if (todayEntry) {
+    return todayEntry.date;
+  }
+  return days.find((entry) => entry.date > today)?.date ?? days[0]?.date ?? null;
+}
+
+interface MonthProps {
   year: number;
-  days: VacationCalendarDay[];
+  monthIndex: number;
+  byDate: Map<string, DayRequests>;
+  selectedDate: string | null;
+  today: string;
+  onSelect: (key: string) => void;
 }
 
-const monthNames = Array.from({ length: 12 }, (_, index) => new Date(Date.UTC(2026, index, 1)));
-
-function cellTone(dayRequests: VacationCalendarDay['requests']): string {
-  if (dayRequests.some((request) => request.absenceType === 'SICK')) {
-    return 'bg-sky-200/80 text-sky-900 dark:bg-sky-900/60 dark:text-sky-100';
-  }
-  if (dayRequests.some((request) => request.status === 'PENDING')) {
-    return 'bg-amber-200/70 text-amber-900 dark:bg-amber-900/60 dark:text-amber-100';
-  }
-  if (dayRequests.some((request) => request.status === 'APPROVED')) {
-    return 'bg-emerald-200/70 text-emerald-900 dark:bg-emerald-900/60 dark:text-emerald-100';
-  }
-  if (dayRequests.some((request) => request.status === 'REJECTED')) {
-    return 'bg-rose-200/70 text-rose-900 dark:bg-rose-900/60 dark:text-rose-100';
-  }
-  return '';
-}
-
-export function YearVacationCalendar({ year, days }: YearVacationCalendarProps) {
-  const byDate = useMemo(() => new Map(days.map((entry) => [entry.date, entry.requests])), [days]);
-  const [selectedDate, setSelectedDate] = useState<string | null>(days[0]?.date ?? null);
-
-  const selectedRequests = selectedDate ? byDate.get(selectedDate) ?? [] : [];
+function Month({ year, monthIndex, byDate, selectedDate, today, onSelect }: MonthProps) {
+  const monthName = monthFormatter.format(new Date(Date.UTC(year, monthIndex, 1)));
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[1.7fr_1fr]">
-      <div className="grid gap-4 md:grid-cols-2">
-        {monthNames.map((monthDate) => {
-          const month = new Date(year, monthDate.getUTCMonth(), 1);
-          const gridStart = startOfWeek(startOfMonth(month), { weekStartsOn: 1 });
-          const gridEnd = endOfWeek(endOfMonth(month), { weekStartsOn: 1 });
-          const monthDays = eachDayOfInterval({ start: gridStart, end: gridEnd });
-
+    <section aria-label={`${monthName} ${year}`} className="rounded-2xl border border-border bg-card p-4">
+      <h3 className="mb-2 font-display text-[15px] font-semibold">{monthName}</h3>
+      <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-muted-foreground" aria-hidden="true">
+        {weekdayNames.map((name) => (
+          <span key={name}>{name}</span>
+        ))}
+      </div>
+      <div className="mt-1 grid grid-cols-7 gap-1 text-center text-[13px]">
+        {monthCells(year, monthIndex).map((cell, index) => {
+          if (!cell) {
+            return <span key={`blank-${index}`} aria-hidden="true" />;
+          }
+          const requests = byDate.get(cell.key);
+          const isToday = cell.key === today;
+          if (!requests) {
+            return (
+              <span
+                key={cell.key}
+                className={cn(
+                  'grid h-9 place-items-center rounded-lg',
+                  cell.isWeekend ? 'text-muted-foreground/70' : '',
+                  isToday ? 'font-bold text-primary-text ring-2 ring-inset ring-primary' : ''
+                )}
+              >
+                {cell.day}
+              </span>
+            );
+          }
+          const isSelected = cell.key === selectedDate;
+          const peopleCount = activeRequests(requests).length;
           return (
-            <div
-              key={month.toISOString()}
-              className="rounded-2xl border border-border bg-card p-3"
+            <button
+              key={cell.key}
+              type="button"
+              aria-label={describeDay(cell.key, requests)}
+              aria-pressed={isSelected}
+              onClick={() => onSelect(cell.key)}
+              className={cn(
+                'relative grid h-9 place-items-center rounded-lg font-semibold transition',
+                cellTone(requests),
+                isSelected ? 'outline outline-2 outline-offset-2 outline-foreground' : '',
+                isToday ? 'underline decoration-2 underline-offset-2' : ''
+              )}
             >
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-sm font-semibold">{format(month, 'MMMM yyyy')}</h3>
-                <div className="text-[11px] text-muted-foreground">Hover and click date</div>
-              </div>
-              <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-muted-foreground">
-                <span>Mon</span>
-                <span>Tue</span>
-                <span>Wed</span>
-                <span>Thu</span>
-                <span>Fri</span>
-                <span>Sat</span>
-                <span>Sun</span>
-              </div>
-              <div className="mt-1 grid grid-cols-7 gap-1 text-center text-xs">
-                {monthDays.map((day) => {
-                  const key = localDateKey(day);
-                  const requests = byDate.get(key) ?? [];
-                  const isSelected = selectedDate === key;
-
-                  return (
-                    <button
-                      key={day.toISOString()}
-                      type="button"
-                      className={`group relative rounded-md px-1 py-1.5 transition ${
-                        isSelected ? 'ring-2 ring-primary' : ''
-                      } ${isSameMonth(day, month) ? '' : 'text-muted-foreground/40'} ${cellTone(
-                        requests
-                      )}`}
-                      onClick={() => setSelectedDate(key)}
-                    >
-                      {format(day, 'd')}
-                      {requests.length > 0 ? (
-                        <div className="pointer-events-none invisible absolute left-1/2 top-full z-20 mt-1 w-64 -translate-x-1/2 rounded-lg border border-border bg-card p-2 text-left shadow-xl group-hover:visible">
-                          <p className="mb-1 text-[11px] font-semibold">{format(day, 'PPPP')}</p>
-                          <div className="space-y-1 text-[11px]">
-                            {requests.map((request) => (
-                              <div key={request.id} className="rounded-md bg-muted p-1.5">
-                                <p className="font-medium">
-                                  {request.user.firstName} {request.user.lastName}
-                                </p>
-                                <p className="text-muted-foreground">
-                                  {absenceTypeLabels[request.absenceType]} · {statusLabels[request.status]}
-                                </p>
-                                <p className="line-clamp-1 text-muted-foreground">{request.reason}</p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+              {cell.day}
+              {peopleCount > 1 ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-foreground px-1 text-[10px] font-bold text-background"
+                >
+                  {peopleCount}
+                </span>
+              ) : null}
+            </button>
           );
         })}
       </div>
+    </section>
+  );
+}
 
-      <aside className="h-fit rounded-2xl border border-border bg-card p-4 xl:sticky xl:top-20">
-        <h3 className="text-sm font-semibold">Day Details</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {selectedDate ? formatLongDate(selectedDate) : 'Select a date'}
-        </p>
+function DayDetails({ selectedDate, requests }: { selectedDate: string | null; requests: DayRequests }) {
+  if (!selectedDate) {
+    return <p className="text-sm text-muted-foreground">No absences recorded this year.</p>;
+  }
 
-        <div className="mt-3 space-y-2">
-          {selectedDate && selectedRequests.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No requests recorded for this date.</p>
-          ) : null}
-
-          {selectedRequests.map((request) => (
-            <div key={request.id} className="rounded-xl bg-muted p-3 text-sm">
-              <p className="font-semibold">
-                {request.user.firstName} {request.user.lastName}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {request.user.email}
-                {request.user.department ? ` · ${request.user.department}` : ''}
-              </p>
-              <p className="mt-1 text-xs">
-                {absenceTypeLabels[request.absenceType]} · {statusLabels[request.status]}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {formatDateRange(request.startDate, request.endDate)}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">{request.reason}</p>
+  return (
+    <>
+      <p className="text-sm font-semibold">{formatLongDate(selectedDate)}</p>
+      <ul className="flex flex-col gap-2.5">
+        {requests.map((request) => (
+          <li key={request.id} className="rounded-xl bg-muted p-3.5 text-sm">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="font-semibold">
+                  {request.user.firstName} {request.user.lastName}
+                </p>
+                {request.user.department ? (
+                  <p className="text-[13px] text-muted-foreground">{request.user.department}</p>
+                ) : null}
+              </div>
+              <StatusBadge status={request.status} />
             </div>
-          ))}
-        </div>
-      </aside>
+            <p className="mt-2">
+              {absenceTypeLabels[request.absenceType]} · {formatDateRange(request.startDate, request.endDate)} ·{' '}
+              {plural(countWorkingDays(request.startDate, request.endDate), 'working day')}
+            </p>
+            <p className="mt-0.5 text-muted-foreground">“{request.reason}”</p>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+interface YearVacationCalendarProps {
+  year: number;
+  today: string;
+  days: VacationCalendarDay[];
+  sidePanelFooter: ReactNode;
+}
+
+export function YearVacationCalendar({ year, today, days, sidePanelFooter }: YearVacationCalendarProps) {
+  const byDate = useMemo(() => new Map(days.map((entry) => [entry.date, entry.requests])), [days]);
+  const [selectedDate, setSelectedDate] = useState<string | null>(() => initialSelection(days, today));
+  const detailsRef = useRef<HTMLElement>(null);
+
+  const selectDate = (key: string) => {
+    setSelectedDate(key);
+    if (!window.matchMedia('(min-width: 1280px)').matches) {
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      detailsRef.current?.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' });
+    }
+  };
+
+  return (
+    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)]">
+      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+        {Array.from({ length: 12 }, (_, monthIndex) => (
+          <Month
+            key={monthIndex}
+            year={year}
+            monthIndex={monthIndex}
+            byDate={byDate}
+            selectedDate={selectedDate}
+            today={today}
+            onSelect={selectDate}
+          />
+        ))}
+      </div>
+      <div className="flex flex-col gap-5 xl:sticky xl:top-24">
+        <section
+          ref={detailsRef}
+          aria-labelledby="day-details-title"
+          aria-live="polite"
+          className="flex scroll-mt-24 flex-col gap-3 rounded-2xl border border-border bg-card p-5"
+        >
+          <h2 id="day-details-title" className="font-display text-[17px] font-semibold">
+            Day details
+          </h2>
+          <DayDetails selectedDate={selectedDate} requests={selectedDate ? (byDate.get(selectedDate) ?? []) : []} />
+        </section>
+        {sidePanelFooter}
+      </div>
     </div>
   );
 }

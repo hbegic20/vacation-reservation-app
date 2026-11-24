@@ -1,27 +1,25 @@
-import Link from 'next/link';
-import { TopNav } from '@/components/layout/top-nav';
+import type { Metadata } from 'next';
 import { CreateEmployeeForm } from '@/components/forms/create-employee-form';
-import { buttonStyles } from '@/components/ui/button';
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
 import { Card } from '@/components/ui/card';
 import { requireAdmin } from '@/lib/auth';
+
+export const metadata: Metadata = { title: 'Add employee' };
 
 export default async function NewEmployeePage() {
   const user = await requireAdmin();
 
   return (
-    <div>
-      <TopNav user={user} />
-      <main className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Create Employee Account</h1>
-          <Link href="/admin/employees" className={buttonStyles('secondary')}>
-            Back to Employees
-          </Link>
-        </div>
-        <Card>
-          <CreateEmployeeForm />
-        </Card>
-      </main>
-    </div>
+    <PageShell user={user} width="narrow">
+      <PageHeader
+        title="Add employee"
+        description="They can sign in with their email and the temporary password."
+        back={{ href: '/admin/employees', label: 'Back to employees' }}
+      />
+      <Card>
+        <CreateEmployeeForm />
+      </Card>
+    </PageShell>
   );
 }

@@ -1,59 +1,73 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { TopNav } from '@/components/layout/top-nav';
-import { Card } from '@/components/ui/card';
+import { redirect } from 'next/navigation';
+import { VacationRequest } from '@vacation/shared';
+import { RequestList } from '@/components/dashboard/request-list';
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
 import { buttonStyles } from '@/components/ui/button';
-import { StatusBadge } from '@/components/ui/badge';
+import { Icon } from '@/components/ui/icon';
+import { todayKey } from '@/lib/absences';
 import { fetchVacations } from '@/lib/api';
 import { requireToken, requireUser } from '@/lib/auth';
-import { formatDateRange } from '@/lib/dates';
-import { absenceTypeLabels } from '@/lib/labels';
+import { toDateKey } from '@/lib/dates';
+
+export const metadata: Metadata = { title: 'My requests' };
+
+function isComingUp(request: VacationRequest, today: string): boolean {
+  return request.status !== 'REJECTED' && toDateKey(request.endDate) >= today;
+}
+
+function RequestSection({ id, title, requests }: { id: string; title: string; requests: VacationRequest[] }) {
+  return (
+    <section aria-labelledby={id} className="overflow-hidden rounded-2xl border border-border bg-card">
+      <h2 id={id} className="border-b border-border px-6 py-5 font-display text-[17px] font-semibold">
+        {title} <span className="font-sans text-sm font-medium text-muted-foreground">({requests.length})</span>
+      </h2>
+      <RequestList requests={requests} />
+    </section>
+  );
+}
 
 export default async function VacationsPage() {
   const user = await requireUser();
+  if (user.role === 'ADMIN') {
+    redirect('/admin/requests?status=ALL');
+  }
+
   const token = requireToken();
   const vacations = await fetchVacations(token);
+  const today = todayKey();
+  const comingUp = vacations
+    .filter((request) => isComingUp(request, today))
+    .sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const past = vacations.filter((request) => !isComingUp(request, today));
 
   return (
-    <div>
-      <TopNav user={user} />
-      <main className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Vacation Requests</h1>
-          {user.role === 'EMPLOYEE' ? (
-            <Link href="/vacations/request" className={buttonStyles()}>
-              Request Vacation
-            </Link>
-          ) : null}
+    <PageShell user={user} width="medium">
+      <PageHeader
+        title="My requests"
+        description={`${user.vacationDaysTotal - user.vacationDaysUsed} of ${user.vacationDaysTotal} days left this year`}
+        actions={
+          <Link href="/vacations/request" className={buttonStyles('primary', 'min-h-12 px-5 text-[15px]')}>
+            <Icon name="plus" size={18} />
+            Request time off
+          </Link>
+        }
+      />
+      {vacations.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-input bg-card px-6 py-12 text-center">
+          <p className="font-display text-xl font-semibold">No requests yet</p>
+          <p className="mt-1 text-muted-foreground">When you request time off, it shows up here.</p>
         </div>
-
-        <div className="grid gap-4">
-          {vacations.length === 0 ? (
-            <Card>
-              <p className="text-sm text-muted-foreground">
-                {user.role === 'EMPLOYEE'
-                  ? 'You have not requested any time off yet.'
-                  : 'No vacation requests have been submitted yet.'}
-              </p>
-            </Card>
+      ) : (
+        <>
+          {comingUp.length > 0 ? (
+            <RequestSection id="coming-up-title" title="Coming up" requests={comingUp} />
           ) : null}
-          {vacations.map((request) => (
-            <Card key={request.id} className="space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">
-                  {formatDateRange(request.startDate, request.endDate)}
-                </p>
-                <StatusBadge status={request.status} />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {absenceTypeLabels[request.absenceType]} · {request.reason}
-              </p>
-              {request.adminComment ? (
-                <p className="rounded-lg bg-muted px-3 py-2 text-sm">Admin: {request.adminComment}</p>
-              ) : null}
-            </Card>
-          ))}
-        </div>
-      </main>
-    </div>
+          {past.length > 0 ? <RequestSection id="past-title" title="Past and rejected" requests={past} /> : null}
+        </>
+      )}
+    </PageShell>
   );
 }
