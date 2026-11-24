@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from "@nestjs/common";
@@ -138,6 +139,49 @@ describe("VacationsService", () => {
       ).toBe(4);
     });
 
+    it("rejects dates that overlap the employee's existing time off", async () => {
+      prisma.user.findUnique.mockResolvedValue(buildUser());
+      prisma.vacationRequest.findFirst.mockResolvedValue(
+        buildRequest({
+          status: VacationStatus.APPROVED,
+          startDate: utcDate("2026-03-11"),
+          endDate: utcDate("2026-03-12"),
+        }),
+      );
+
+      await expect(
+        vacationsService.createRequest(employeeUser, monToFri),
+      ).rejects.toThrow(
+        new ConflictException(
+          "These dates overlap approved time off from 11 Mar 2026 – 12 Mar 2026.",
+        ),
+      );
+      expect(prisma.vacationRequest.findFirst.mock.calls[0][0].where).toEqual({
+        userId: "employee-1",
+        status: { in: [VacationStatus.PENDING, VacationStatus.APPROVED] },
+        startDate: { lte: utcDate("2026-03-13") },
+        endDate: { gte: utcDate("2026-03-09") },
+      });
+      expect(prisma.vacationRequest.create).not.toHaveBeenCalled();
+    });
+
+    it("names a pending request in the overlap message", async () => {
+      prisma.user.findUnique.mockResolvedValue(buildUser());
+      prisma.vacationRequest.findFirst.mockResolvedValue(
+        buildRequest({
+          status: VacationStatus.PENDING,
+          startDate: utcDate("2026-03-13"),
+          endDate: utcDate("2026-03-13"),
+        }),
+      );
+
+      await expect(
+        vacationsService.createRequest(employeeUser, monToFri),
+      ).rejects.toThrow(
+        "These dates overlap a pending request from 13 Mar 2026.",
+      );
+    });
+
     it("rejects a request larger than the remaining allowance", async () => {
       prisma.user.findUnique.mockResolvedValue(
         buildUser({ vacationDaysTotal: 25, vacationDaysUsed: 22 }),
@@ -189,9 +233,29 @@ describe("VacationsService", () => {
       );
       expect(notifications.notifyEmployee).toHaveBeenCalledWith(
         "employee-1",
-        "Sick leave recorded",
-        expect.stringContaining("was recorded as sick leave"),
+        expect.objectContaining({
+          type: "SICK_LEAVE_ADDED",
+          title: "Sick leave recorded",
+          message: expect.stringContaining("was recorded as sick leave"),
+        }),
       );
+    });
+
+    it("rejects sick leave that overlaps recorded sick leave, but not vacation", async () => {
+      prisma.user.findFirst.mockResolvedValue(buildUser());
+      prisma.vacationRequest.findFirst.mockResolvedValue(
+        buildRequest({
+          absenceType: AbsenceType.SICK,
+          status: VacationStatus.APPROVED,
+        }),
+      );
+
+      await expect(vacationsService.createSickLeave(dto)).rejects.toThrow(
+        /overlap sick leave/,
+      );
+      expect(
+        prisma.vacationRequest.findFirst.mock.calls[0][0].where,
+      ).toMatchObject({ absenceType: AbsenceType.SICK });
     });
 
     it("rejects an end date before the start date", async () => {
@@ -271,11 +335,13 @@ describe("VacationsService", () => {
 
       await vacationsService.approve("request-1", "Enjoy");
 
-      expect(notifications.notifyEmployee).toHaveBeenCalledWith(
-        "employee-1",
-        "Vacation approved",
-        "Your time off from 2026-03-09 to 2026-03-13 was approved.\n\nComment: Enjoy",
-      );
+      expect(notifications.notifyEmployee).toHaveBeenCalledWith("employee-1", {
+        type: "VACATION_APPROVED",
+        title: "Vacation approved",
+        message:
+          'Your time off 9 Mar 2026 – 13 Mar 2026 was approved. Admin comment: "Enjoy"',
+        metadata: { requestId: "request-1" },
+      });
     });
 
     it("approves sick leave without touching the vacation allowance", async () => {
@@ -294,6 +360,28 @@ describe("VacationsService", () => {
         status: VacationStatus.APPROVED,
         adminComment: null,
       });
+    });
+
+    it("refuses to approve a request that overlaps other approved time off", async () => {
+      prisma.vacationRequest.findUnique.mockResolvedValue({
+        ...buildRequest(),
+        user: buildUser(),
+      });
+      prisma.vacationRequest.findFirst.mockResolvedValue(
+        buildRequest({ id: "request-2", status: VacationStatus.APPROVED }),
+      );
+
+      await expect(
+        vacationsService.approve("request-1"),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(
+        prisma.vacationRequest.findFirst.mock.calls[0][0].where,
+      ).toMatchObject({
+        userId: "employee-1",
+        status: { in: [VacationStatus.APPROVED] },
+        id: { not: "request-1" },
+      });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it("refuses when the employee no longer has enough days", async () => {
@@ -351,8 +439,11 @@ describe("VacationsService", () => {
       );
       expect(notifications.notifyEmployee).toHaveBeenCalledWith(
         "employee-1",
-        "Vacation request rejected",
-        expect.stringContaining("was rejected"),
+        expect.objectContaining({
+          type: "VACATION_REJECTED",
+          title: "Vacation request rejected",
+          message: expect.stringContaining("was rejected"),
+        }),
       );
     });
 

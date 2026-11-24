@@ -1,24 +1,37 @@
-import { AdminNotificationItem } from '@vacation/shared';
+import Link from 'next/link';
+import { NotificationItem } from '@vacation/shared';
 import { markAllNotificationsReadAction, markNotificationReadAction } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { formatTimestamp } from '@/lib/dates';
 import { notificationTypeLabels } from '@/lib/labels';
 import { cn } from '@/lib/utils';
 
-const visibleLimit = 6;
-
-interface AdminNotificationsProps {
-  notifications: AdminNotificationItem[];
+interface NotificationsPanelProps {
+  title: string;
+  notifications: NotificationItem[];
   unreadCount: number;
+  emptyText?: string;
+  limit?: number;
+  viewAllHref?: string;
 }
 
-export function AdminNotifications({ notifications, unreadCount }: AdminNotificationsProps) {
+export function NotificationsPanel({
+  title,
+  notifications,
+  unreadCount,
+  emptyText = 'No notifications yet.',
+  limit,
+  viewAllHref
+}: NotificationsPanelProps) {
+  const visible = limit ? notifications.slice(0, limit) : notifications;
+  const hasMore = viewAllHref !== undefined && notifications.length > visible.length;
+
   return (
     <section aria-labelledby="notifications-title" className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5">
         <div>
           <h2 id="notifications-title" className="font-display text-[17px] font-semibold">
-            Notifications
+            {title}
           </h2>
           <p className="text-sm text-muted-foreground">
             {unreadCount === 0 ? 'Everything is read.' : `${unreadCount} unread`}
@@ -33,11 +46,11 @@ export function AdminNotifications({ notifications, unreadCount }: AdminNotifica
         ) : null}
       </div>
 
-      {notifications.length === 0 ? (
-        <p className="px-6 py-5 text-sm text-muted-foreground">No notifications yet.</p>
+      {visible.length === 0 ? (
+        <p className="px-6 py-5 text-sm text-muted-foreground">{emptyText}</p>
       ) : (
         <ul>
-          {notifications.slice(0, visibleLimit).map((notification) => (
+          {visible.map((notification) => (
             <li
               key={notification.id}
               className={cn(
@@ -76,6 +89,15 @@ export function AdminNotifications({ notifications, unreadCount }: AdminNotifica
           ))}
         </ul>
       )}
+
+      {hasMore ? (
+        <Link
+          href={viewAllHref}
+          className="block border-t border-border px-6 py-3.5 text-sm font-semibold text-primary-text hover:bg-muted"
+        >
+          View all notifications
+        </Link>
+      ) : null}
     </section>
   );
 }

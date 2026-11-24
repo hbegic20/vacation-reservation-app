@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { AuthUser, EmployeeSummaryResponse, TeamAbsence } from '@vacation/shared';
+import { AuthUser, EmployeeSummaryResponse, NotificationItem, TeamAbsence } from '@vacation/shared';
+import { NotificationsPanel } from '@/components/notifications/notifications-panel';
 import { buttonStyles } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { AllowanceCard } from './allowance-card';
@@ -11,6 +12,7 @@ interface EmployeeDashboardProps {
   user: AuthUser;
   summary: EmployeeSummaryResponse;
   teamAbsences: TeamAbsence[];
+  unreadNotifications: NotificationItem[];
 }
 
 function pendingWorkingDays(summary: EmployeeSummaryResponse): number {
@@ -19,7 +21,12 @@ function pendingWorkingDays(summary: EmployeeSummaryResponse): number {
     .reduce((total, request) => total + request.workingDays, 0);
 }
 
-export function EmployeeDashboard({ user, summary, teamAbsences }: EmployeeDashboardProps) {
+export function EmployeeDashboard({
+  user,
+  summary,
+  teamAbsences,
+  unreadNotifications
+}: EmployeeDashboardProps) {
   return (
     <div className="flex flex-col gap-7">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -36,6 +43,16 @@ export function EmployeeDashboard({ user, summary, teamAbsences }: EmployeeDashb
           Request time off
         </Link>
       </div>
+
+      {unreadNotifications.length > 0 ? (
+        <NotificationsPanel
+          title="New updates"
+          notifications={unreadNotifications}
+          unreadCount={unreadNotifications.length}
+          limit={3}
+          viewAllHref="/notifications"
+        />
+      ) : null}
 
       <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
         <AllowanceCard

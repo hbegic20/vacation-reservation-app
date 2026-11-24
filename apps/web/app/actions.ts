@@ -88,7 +88,7 @@ export async function createVacationAction(_: unknown, formData: FormData) {
     revalidatePath('/dashboard');
     return { success: true, error: null };
   } catch (error) {
-    return failureState(error, 'Could not submit request. Check dates and remaining days.');
+    return failureWithApiMessage(error, 'Could not submit request. Check dates and remaining days.');
   }
 }
 
@@ -110,7 +110,7 @@ export async function moderateVacationAction(_: unknown, formData: FormData) {
     revalidatePath('/vacations');
     return { success: true, error: null };
   } catch (error) {
-    return failureState(error, 'Unable to update request status');
+    return failureWithApiMessage(error, 'Unable to update request status');
   }
 }
 
@@ -235,24 +235,23 @@ export async function createSickLeaveAction(_: unknown, formData: FormData) {
 
 export async function markNotificationReadAction(formData: FormData) {
   const token = requireToken();
-
   const notificationId = String(formData.get('notificationId') || '');
 
   try {
     await markNotificationRead(token, notificationId);
-    revalidatePath('/dashboard');
   } catch (error) {
     if (!(error instanceof ApiError)) {
       throw error;
     }
   }
+  revalidatePath('/', 'layout');
 }
 
 export async function markAllNotificationsReadAction() {
   const token = requireToken();
 
   await markAllNotificationsRead(token);
-  revalidatePath('/dashboard');
+  revalidatePath('/', 'layout');
 }
 
 export async function cancelVacationAction(_: unknown, formData: FormData) {

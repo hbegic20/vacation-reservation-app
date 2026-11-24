@@ -1,12 +1,18 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { AbsenceType, UserRole, VacationStatus } from "@prisma/client";
+import {
+  AbsenceType,
+  NotificationType,
+  UserRole,
+  VacationStatus,
+} from "@prisma/client";
 import { RequestUser } from "../auth/types";
-import { startOfUtcDay, toDateKey } from "../common/dates";
+import { formatDateRange, startOfUtcDay, toDateKey } from "../common/dates";
 import { HolidaysService } from "../holidays/holidays.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -24,17 +30,55 @@ export class VacationsService {
   ) {}
 
   private async notifyEmployeeOfOutcome(
-    request: { userId: string; startDate: Date; endDate: Date },
-    subject: string,
+    request: { id: string; userId: string; startDate: Date; endDate: Date },
+    type: NotificationType,
+    title: string,
     outcome: string,
     adminComment: string | null,
   ) {
-    const range = `${toDateKey(request.startDate)} to ${toDateKey(request.endDate)}`;
-    const comment = adminComment ? `\n\nComment: ${adminComment}` : "";
-    await this.notificationsService.notifyEmployee(
-      request.userId,
-      subject,
-      `Your time off from ${range} ${outcome}.${comment}`,
+    const range = formatDateRange(request.startDate, request.endDate);
+    const comment = adminComment ? ` Admin comment: "${adminComment}"` : "";
+    await this.notificationsService.notifyEmployee(request.userId, {
+      type,
+      title,
+      message: `Your time off ${range} ${outcome}.${comment}`,
+      metadata: { requestId: request.id },
+    });
+  }
+
+  private async ensureNoOverlap(range: {
+    userId: string;
+    startDate: Date;
+    endDate: Date;
+    statuses: VacationStatus[];
+    absenceType?: AbsenceType;
+    excludeRequestId?: string;
+  }) {
+    const overlapping = await this.prisma.vacationRequest.findFirst({
+      where: {
+        userId: range.userId,
+        status: { in: range.statuses },
+        startDate: { lte: startOfUtcDay(range.endDate) },
+        endDate: { gte: startOfUtcDay(range.startDate) },
+        ...(range.absenceType ? { absenceType: range.absenceType } : {}),
+        ...(range.excludeRequestId
+          ? { id: { not: range.excludeRequestId } }
+          : {}),
+      },
+      orderBy: { startDate: "asc" },
+    });
+    if (!overlapping) {
+      return;
+    }
+
+    const kind =
+      overlapping.absenceType === AbsenceType.SICK
+        ? "sick leave"
+        : overlapping.status === VacationStatus.PENDING
+          ? "a pending request"
+          : "approved time off";
+    throw new ConflictException(
+      `These dates overlap ${kind} from ${formatDateRange(overlapping.startDate, overlapping.endDate)}.`,
     );
   }
 
@@ -61,6 +105,13 @@ export class VacationsService {
     if (requestedDays > remainingDays) {
       throw new BadRequestException("Not enough remaining vacation days");
     }
+
+    await this.ensureNoOverlap({
+      userId: user.id,
+      startDate: dto.startDate,
+      endDate: dto.endDate,
+      statuses: [VacationStatus.PENDING, VacationStatus.APPROVED],
+    });
 
     const request = await this.prisma.vacationRequest.create({
       data: {
@@ -117,6 +168,14 @@ export class VacationsService {
       throw new NotFoundException("Employee not found");
     }
 
+    await this.ensureNoOverlap({
+      userId: dto.userId,
+      startDate: dto.startDate,
+      endDate: dto.endDate,
+      statuses: [VacationStatus.APPROVED],
+      absenceType: AbsenceType.SICK,
+    });
+
     const sickEntry = await this.prisma.vacationRequest.create({
       data: {
         userId: dto.userId,
@@ -157,6 +216,7 @@ export class VacationsService {
 
     await this.notifyEmployeeOfOutcome(
       sickEntry,
+      NotificationType.SICK_LEAVE_ADDED,
       "Sick leave recorded",
       "was recorded as sick leave",
       sickEntry.adminComment,
@@ -232,6 +292,14 @@ export class VacationsService {
       throw new BadRequestException("Only pending requests can be approved");
     }
 
+    await this.ensureNoOverlap({
+      userId: request.userId,
+      startDate: request.startDate,
+      endDate: request.endDate,
+      statuses: [VacationStatus.APPROVED],
+      excludeRequestId: request.id,
+    });
+
     if (request.absenceType === AbsenceType.SICK) {
       const approvedSick = await this.prisma.vacationRequest.update({
         where: { id: requestId },
@@ -250,6 +318,7 @@ export class VacationsService {
 
       await this.notifyEmployeeOfOutcome(
         approvedSick,
+        NotificationType.VACATION_APPROVED,
         "Request approved",
         "was approved",
         approvedSick.adminComment,
@@ -309,6 +378,7 @@ export class VacationsService {
 
     await this.notifyEmployeeOfOutcome(
       approvedVacation,
+      NotificationType.VACATION_APPROVED,
       "Vacation approved",
       "was approved",
       approvedVacation.adminComment,
@@ -363,6 +433,7 @@ export class VacationsService {
 
     await this.notifyEmployeeOfOutcome(
       rejected,
+      NotificationType.VACATION_REJECTED,
       "Vacation request rejected",
       "was rejected",
       rejected.adminComment,

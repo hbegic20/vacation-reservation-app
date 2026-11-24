@@ -6,6 +6,7 @@ import {
   asPrismaService,
   createPrismaMock,
 } from "../../test/prisma-mock";
+import { MailerService } from "./mailer.service";
 import { NotificationsService } from "./notifications.service";
 
 const payload = {
@@ -16,6 +17,7 @@ const payload = {
 
 describe("NotificationsService", () => {
   let prisma: PrismaMock;
+  let mailer: { isEnabled: jest.Mock; send: jest.Mock };
   let fetchMock: jest.SpyInstance;
 
   function createService(settings: Record<string, string> = {}) {
@@ -25,21 +27,26 @@ describe("NotificationsService", () => {
     return new NotificationsService(
       asPrismaService(prisma),
       config as unknown as ConfigService,
+      mailer as unknown as MailerService,
     );
   }
 
   beforeEach(() => {
     prisma = createPrismaMock();
+    mailer = {
+      isEnabled: jest.fn().mockReturnValue(false),
+      send: jest.fn().mockResolvedValue(undefined),
+    };
     fetchMock = jest
       .spyOn(global, "fetch")
       .mockResolvedValue(new Response(null, { status: 200 }));
   });
 
   describe("createAndDispatch", () => {
-    it("stores one notification per active admin and sends nothing external by default", async () => {
+    it("stores one notification per active admin", async () => {
       prisma.user.findMany.mockResolvedValue([
-        { id: "admin-1" },
-        { id: "admin-2" },
+        { id: "admin-1", email: "admin@company.com" },
+        { id: "admin-2", email: "ops@company.com" },
       ]);
 
       await createService().createAndDispatch(payload);
@@ -48,12 +55,13 @@ describe("NotificationsService", () => {
         role: "ADMIN",
         isActive: true,
       });
-      expect(prisma.adminNotification.createMany).toHaveBeenCalledWith({
+      expect(prisma.notification.createMany).toHaveBeenCalledWith({
         data: [
-          expect.objectContaining({ adminId: "admin-1", type: payload.type }),
-          expect.objectContaining({ adminId: "admin-2", type: payload.type }),
+          { userId: "admin-1", ...payload },
+          { userId: "admin-2", ...payload },
         ],
       });
+      expect(mailer.send).not.toHaveBeenCalled();
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
@@ -62,7 +70,23 @@ describe("NotificationsService", () => {
 
       await createService().createAndDispatch(payload);
 
-      expect(prisma.adminNotification.createMany).not.toHaveBeenCalled();
+      expect(prisma.notification.createMany).not.toHaveBeenCalled();
+    });
+
+    it("emails all active admins when email is enabled", async () => {
+      mailer.isEnabled.mockReturnValue(true);
+      prisma.user.findMany.mockResolvedValue([
+        { id: "admin-1", email: "admin@company.com" },
+        { id: "admin-2", email: "ops@company.com" },
+      ]);
+
+      await createService().createAndDispatch(payload);
+
+      expect(mailer.send).toHaveBeenCalledWith({
+        to: ["admin@company.com", "ops@company.com"],
+        subject: payload.title,
+        text: payload.message,
+      });
     });
 
     it("posts to the Slack webhook when one is configured", async () => {
@@ -83,29 +107,7 @@ describe("NotificationsService", () => {
       );
     });
 
-    it("emails active admins through Resend when configured", async () => {
-      prisma.user.findMany
-        .mockResolvedValueOnce([{ id: "admin-1" }])
-        .mockResolvedValueOnce([{ email: "admin@company.com" }]);
-
-      await createService({
-        EMAIL_PROVIDER: "resend",
-        RESEND_API_KEY: "re_test",
-        EMAIL_FROM: "hub@company.com",
-      }).createAndDispatch(payload);
-
-      const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toBe("https://api.resend.com/emails");
-      expect(init.headers.Authorization).toBe("Bearer re_test");
-      expect(JSON.parse(init.body)).toEqual({
-        from: "hub@company.com",
-        to: ["admin@company.com"],
-        subject: payload.title,
-        text: payload.message,
-      });
-    });
-
-    it("does not fail when an external channel is down", async () => {
+    it("does not fail when Slack is down", async () => {
       prisma.user.findMany.mockResolvedValue([{ id: "admin-1" }]);
       fetchMock.mockRejectedValue(new Error("network down"));
 
@@ -118,70 +120,65 @@ describe("NotificationsService", () => {
   });
 
   describe("notifyEmployee", () => {
-    const resend = {
-      EMAIL_PROVIDER: "resend",
-      RESEND_API_KEY: "re_test",
-      EMAIL_FROM: "hub@company.com",
+    const decision = {
+      type: NotificationType.VACATION_APPROVED,
+      title: "Vacation approved",
+      message: "Your time off 22 Apr 2026 – 24 Apr 2026 was approved.",
     };
 
-    it("emails the employee through Resend when configured", async () => {
+    it("stores an in-app notification and emails the employee", async () => {
       prisma.user.findUnique.mockResolvedValue({
         email: "john.employee@company.com",
         isActive: true,
       });
 
-      await createService(resend).notifyEmployee(
-        "employee-1",
-        "Vacation approved",
-        "Your time off was approved.",
-      );
+      await createService().notifyEmployee("employee-1", decision);
 
-      const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toBe("https://api.resend.com/emails");
-      expect(JSON.parse(init.body)).toEqual({
-        from: "hub@company.com",
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: { userId: "employee-1", ...decision },
+      });
+      expect(mailer.send).toHaveBeenCalledWith({
         to: ["john.employee@company.com"],
-        subject: "Vacation approved",
-        text: "Your time off was approved.",
+        subject: decision.title,
+        text: decision.message,
       });
     });
 
-    it("does nothing when email is not configured", async () => {
-      await createService().notifyEmployee("employee-1", "Subject", "Text");
-
-      expect(prisma.user.findUnique).not.toHaveBeenCalled();
-      expect(fetchMock).not.toHaveBeenCalled();
-    });
-
-    it("skips inactive employees", async () => {
+    it("keeps the in-app notification but skips email for inactive employees", async () => {
       prisma.user.findUnique.mockResolvedValue({
         email: "former@company.com",
         isActive: false,
       });
 
-      await createService(resend).notifyEmployee(
-        "employee-9",
-        "Subject",
-        "Text",
-      );
+      await createService().notifyEmployee("employee-9", decision);
 
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(prisma.notification.create).toHaveBeenCalled();
+      expect(mailer.send).not.toHaveBeenCalled();
+    });
+
+    it("does nothing for an unknown user", async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await createService().notifyEmployee("missing", decision);
+
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+      expect(mailer.send).not.toHaveBeenCalled();
     });
   });
 
-  it("lists only unread notifications for the admin when asked", async () => {
-    prisma.adminNotification.findMany.mockResolvedValue([]);
+  it("lists only the user's unread notifications when asked", async () => {
+    prisma.notification.findMany.mockResolvedValue([]);
 
-    await createService().listAdminNotifications("admin-1", true);
+    await createService().listForUser("employee-1", true);
 
-    expect(prisma.adminNotification.findMany.mock.calls[0][0].where).toEqual({
-      adminId: "admin-1",
+    expect(prisma.notification.findMany.mock.calls[0][0].where).toEqual({
+      userId: "employee-1",
       isRead: false,
     });
   });
 
   it("counts unread notifications", async () => {
-    prisma.adminNotification.count.mockResolvedValue(4);
+    prisma.notification.count.mockResolvedValue(4);
 
     await expect(createService().getUnreadCount("admin-1")).resolves.toEqual({
       unread: 4,
@@ -189,43 +186,38 @@ describe("NotificationsService", () => {
   });
 
   describe("markAsRead", () => {
-    it("marks the admin's own notification as read", async () => {
-      prisma.adminNotification.findFirst.mockResolvedValue({ id: "n-1" });
-      prisma.adminNotification.update.mockResolvedValue({
+    it("marks the user's own notification as read", async () => {
+      prisma.notification.findFirst.mockResolvedValue({ id: "n-1" });
+      prisma.notification.update.mockResolvedValue({ id: "n-1", isRead: true });
+
+      await createService().markAsRead("employee-1", "n-1");
+
+      expect(prisma.notification.findFirst.mock.calls[0][0].where).toEqual({
         id: "n-1",
-        isRead: true,
+        userId: "employee-1",
       });
-
-      await createService().markAsRead("admin-1", "n-1");
-
-      expect(prisma.adminNotification.findFirst.mock.calls[0][0].where).toEqual(
-        {
-          id: "n-1",
-          adminId: "admin-1",
-        },
-      );
-      expect(prisma.adminNotification.update).toHaveBeenCalledWith({
+      expect(prisma.notification.update).toHaveBeenCalledWith({
         where: { id: "n-1" },
         data: { isRead: true },
       });
     });
 
-    it("refuses a notification that belongs to another admin", async () => {
-      prisma.adminNotification.findFirst.mockResolvedValue(null);
+    it("refuses a notification that belongs to someone else", async () => {
+      prisma.notification.findFirst.mockResolvedValue(null);
 
       await expect(
-        createService().markAsRead("admin-1", "someone-elses"),
+        createService().markAsRead("employee-1", "someone-elses"),
       ).rejects.toBeInstanceOf(NotFoundException);
-      expect(prisma.adminNotification.update).not.toHaveBeenCalled();
+      expect(prisma.notification.update).not.toHaveBeenCalled();
     });
   });
 
-  it("marks all unread notifications of the admin as read", async () => {
-    await expect(createService().markAllAsRead("admin-1")).resolves.toEqual({
+  it("marks all unread notifications of the user as read", async () => {
+    await expect(createService().markAllAsRead("employee-1")).resolves.toEqual({
       success: true,
     });
-    expect(prisma.adminNotification.updateMany).toHaveBeenCalledWith({
-      where: { adminId: "admin-1", isRead: false },
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+      where: { userId: "employee-1", isRead: false },
       data: { isRead: true },
     });
   });
@@ -239,7 +231,7 @@ describe("NotificationsService", () => {
     await createService().sendDailyDigest();
 
     expect(
-      prisma.adminNotification.createMany.mock.calls[0][0].data[0],
+      prisma.notification.createMany.mock.calls[0][0].data[0],
     ).toMatchObject({
       type: NotificationType.DAILY_DIGEST,
       message:

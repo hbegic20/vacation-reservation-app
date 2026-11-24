@@ -21,82 +21,75 @@ describe("Notification endpoints", () => {
     await testApp.app.close();
   });
 
-  describe("GET /api/notifications/admin", () => {
-    it("lists the admin's notifications", async () => {
-      testApp.prisma.adminNotification.findMany.mockResolvedValue([
-        { id: "n-1" },
-      ]);
+  describe("GET /api/notifications", () => {
+    it("lists the signed-in employee's own notifications", async () => {
+      testApp.prisma.notification.findMany.mockResolvedValue([{ id: "n-1" }]);
 
       const response = await http()
-        .get("/api/notifications/admin?unreadOnly=true")
-        .set(asAdmin())
+        .get("/api/notifications?unreadOnly=true")
+        .set(asEmployee())
         .expect(200);
 
       expect(response.body).toEqual([{ id: "n-1" }]);
       expect(
-        testApp.prisma.adminNotification.findMany.mock.calls[0][0].where,
-      ).toEqual({
-        adminId: "admin-1",
-        isRead: false,
-      });
+        testApp.prisma.notification.findMany.mock.calls[0][0].where,
+      ).toEqual({ userId: "employee-1", isRead: false });
     });
 
-    it("returns 403 for employees", async () => {
-      await http()
-        .get("/api/notifications/admin")
-        .set(asEmployee())
-        .expect(403);
+    it("lists the admin's own notifications", async () => {
+      testApp.prisma.notification.findMany.mockResolvedValue([]);
+
+      await http().get("/api/notifications").set(asAdmin()).expect(200);
+
+      expect(
+        testApp.prisma.notification.findMany.mock.calls[0][0].where,
+      ).toEqual({ userId: "admin-1" });
     });
 
     it("returns 401 without a token", async () => {
-      await http().get("/api/notifications/admin").expect(401);
+      await http().get("/api/notifications").expect(401);
     });
   });
 
-  describe("GET /api/notifications/admin/unread-count", () => {
+  describe("GET /api/notifications/unread-count", () => {
     it("returns the unread count", async () => {
-      testApp.prisma.adminNotification.count.mockResolvedValue(2);
+      testApp.prisma.notification.count.mockResolvedValue(2);
 
       const response = await http()
-        .get("/api/notifications/admin/unread-count")
-        .set(asAdmin())
+        .get("/api/notifications/unread-count")
+        .set(asEmployee())
         .expect(200);
 
       expect(response.body).toEqual({ unread: 2 });
     });
 
-    it("returns 403 for employees", async () => {
-      await http()
-        .get("/api/notifications/admin/unread-count")
-        .set(asEmployee())
-        .expect(403);
+    it("returns 401 without a token", async () => {
+      await http().get("/api/notifications/unread-count").expect(401);
     });
   });
 
   describe("PATCH /api/notifications/:id/read", () => {
     it("marks the notification as read", async () => {
-      testApp.prisma.adminNotification.findFirst.mockResolvedValue({
-        id: "n-1",
-      });
-      testApp.prisma.adminNotification.update.mockResolvedValue({
+      testApp.prisma.notification.findFirst.mockResolvedValue({ id: "n-1" });
+      testApp.prisma.notification.update.mockResolvedValue({
         id: "n-1",
         isRead: true,
       });
 
       const response = await http()
         .patch("/api/notifications/n-1/read")
-        .set(asAdmin())
+        .set(asEmployee())
         .expect(200);
 
       expect(response.body.isRead).toBe(true);
     });
 
-    it("returns 404 for another admin's notification", async () => {
-      testApp.prisma.adminNotification.findFirst.mockResolvedValue(null);
+    it("returns 404 for someone else's notification", async () => {
+      testApp.prisma.notification.findFirst.mockResolvedValue(null);
 
       await http()
         .patch("/api/notifications/n-2/read")
-        .set(asAdmin())
+        .set(asEmployee())
         .expect(404);
     });
   });
@@ -105,17 +98,18 @@ describe("Notification endpoints", () => {
     it("marks everything as read", async () => {
       const response = await http()
         .patch("/api/notifications/read-all")
-        .set(asAdmin())
+        .set(asEmployee())
         .expect(200);
 
       expect(response.body).toEqual({ success: true });
+      expect(testApp.prisma.notification.updateMany).toHaveBeenCalledWith({
+        where: { userId: "employee-1", isRead: false },
+        data: { isRead: true },
+      });
     });
 
-    it("returns 403 for employees", async () => {
-      await http()
-        .patch("/api/notifications/read-all")
-        .set(asEmployee())
-        .expect(403);
+    it("returns 401 without a token", async () => {
+      await http().patch("/api/notifications/read-all").expect(401);
     });
   });
 });

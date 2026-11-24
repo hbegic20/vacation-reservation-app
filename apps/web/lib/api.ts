@@ -3,7 +3,7 @@ import {
   CreateHolidayPayload,
   PublicHoliday,
   TeamAbsence,
-  AdminNotificationItem,
+  NotificationItem,
   AdminListItem,
   CreateAdminPayload,
   CreateEmployeePayload,
@@ -232,17 +232,17 @@ export async function fetchVacationCalendar(token: string, year: number) {
   return parseJson<VacationCalendarDay[]>(response);
 }
 
-export async function fetchAdminNotifications(token: string, unreadOnly = false) {
-  const response = await fetch(`${API_URL}/notifications/admin?unreadOnly=${unreadOnly}`, {
+export async function fetchNotifications(token: string, unreadOnly = false) {
+  const response = await fetch(`${API_URL}/notifications?unreadOnly=${unreadOnly}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store'
   });
 
-  return parseJson<AdminNotificationItem[]>(response);
+  return parseJson<NotificationItem[]>(response);
 }
 
-export async function fetchAdminUnreadNotificationCount(token: string) {
-  const response = await fetch(`${API_URL}/notifications/admin/unread-count`, {
+export async function fetchUnreadNotificationCount(token: string) {
+  const response = await fetch(`${API_URL}/notifications/unread-count`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store'
   });
@@ -256,7 +256,7 @@ export async function markNotificationRead(token: string, notificationId: string
     headers: { Authorization: `Bearer ${token}` }
   });
 
-  return parseJson<AdminNotificationItem>(response);
+  return parseJson<NotificationItem>(response);
 }
 
 export async function markAllNotificationsRead(token: string) {

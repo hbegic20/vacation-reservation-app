@@ -1,11 +1,11 @@
 import {
-  AdminNotificationItem,
+  NotificationItem,
   EmployeeListItem,
   VacationRequest
 } from '@vacation/shared';
 import { formatLongDate } from '@/lib/dates';
 import { todayKey } from '@/lib/absences';
-import { AdminNotifications } from './admin-notifications';
+import { NotificationsPanel } from '@/components/notifications/notifications-panel';
 import { AdminStats } from './admin-stats';
 import { PendingApprovalsCard } from './pending-approvals-card';
 import { WeekAbsences } from './week-absences';
@@ -13,7 +13,7 @@ import { WeekAbsences } from './week-absences';
 interface AdminDashboardProps {
   requests: VacationRequest[];
   employees: EmployeeListItem[];
-  notifications: AdminNotificationItem[];
+  notifications: NotificationItem[];
   unreadCount: number;
 }
 
@@ -41,7 +41,13 @@ export function AdminDashboard({ requests, employees, notifications, unreadCount
 
       <WeekAbsences requests={requests} />
 
-      <AdminNotifications notifications={notifications} unreadCount={unreadCount} />
+      <NotificationsPanel
+        title="Notifications"
+        notifications={notifications}
+        unreadCount={unreadCount}
+        limit={6}
+        viewAllHref="/notifications"
+      />
     </div>
   );
 }

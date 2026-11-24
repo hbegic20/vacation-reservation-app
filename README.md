@@ -23,11 +23,11 @@ Production-oriented monorepo for company leave management with a split architect
 - Admin employee utilization listing
 - Company-wide full-year vacation calendar with date hover details
 - Click-on-date side panel with full day request history
-- In-app admin notification center on dashboard
+- In-app notifications for everyone (bell with unread count, `/notifications` page): admins hear about new requests and cancellations, employees about decisions
 - Optional Email/Slack notifications for request submit/approve/reject/sick leave
 - Daily digest notification for pending approvals (8:00 UTC)
 - Employees can cancel pending requests and approved time off that hasn't started (days are returned)
-- Employees get an email when a request is approved, rejected or recorded as sick leave (Resend)
+- Employees get an in-app notification and an email when a request is approved, rejected or recorded as sick leave
 - Public holidays managed by admins; they don't count as working days
 - "Out on your team this week" for employees (same department, names and dates only)
 - Temporary passwords: users must choose their own password on first sign-in or after a reset
@@ -46,6 +46,7 @@ Production-oriented monorepo for company leave management with a split architect
 - `/admin/admins`
 - `/admin/holidays`
 - `/account/password`
+- `/notifications`
 - Light/dark theme + subtle UI animations
 
 ## Project Structure
@@ -93,8 +94,8 @@ All routes are prefixed with `/api` by Nest.
 - `GET /api/holidays?year=2026`
 - `POST /api/holidays` (admin only)
 - `DELETE /api/holidays/:id` (admin only)
-- `GET /api/notifications/admin`
-- `GET /api/notifications/admin/unread-count`
+- `GET /api/notifications?unreadOnly=true` (signed-in user's own)
+- `GET /api/notifications/unread-count`
 - `PATCH /api/notifications/:id/read`
 - `PATCH /api/notifications/read-all`
 - `POST /api/admin/employees`
@@ -125,10 +126,12 @@ cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
 ```
 
-Notification integrations are optional. Set Slack and/or email provider values in `apps/api/.env` to enable external delivery.
-Supported external notification env vars:
-- `SLACK_WEBHOOK_URL` for Slack channel posts
-- `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `EMAIL_FROM` for email delivery via Resend
+Email and Slack are optional; in-app notifications always work. Settings in `apps/api/.env`:
+- `EMAIL_PROVIDER=smtp` with `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` for any SMTP server. The defaults in `.env.example` point at Mailpit from Docker Compose: every email the app sends shows up at http://localhost:8025 and nothing leaves your machine.
+- `EMAIL_PROVIDER=resend` with `RESEND_API_KEY` and `EMAIL_FROM` for delivery through Resend (requires a verified sending domain).
+- `SLACK_WEBHOOK_URL` for Slack channel posts about admin notifications.
+
+The API reads `.env` only when it starts, so restart `npm run dev` after changing it.
 
 ### 4. Generate Prisma client and run migrations
 ```bash

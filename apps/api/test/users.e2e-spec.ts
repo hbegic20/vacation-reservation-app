@@ -56,6 +56,36 @@ describe("Admin user management endpoints", () => {
       });
     });
 
+    it("trims whitespace around names and department", async () => {
+      testApp.prisma.user.findUnique.mockResolvedValue(null);
+      testApp.prisma.user.create.mockResolvedValue({ id: "employee-2" });
+
+      await http()
+        .post("/api/admin/employees")
+        .set(asAdmin())
+        .send({
+          ...body,
+          firstName: "  Husan ",
+          lastName: "Omerinovic ",
+          department: " Engineering ",
+        })
+        .expect(201);
+
+      expect(testApp.prisma.user.create.mock.calls[0][0].data).toMatchObject({
+        firstName: "Husan",
+        lastName: "Omerinovic",
+        department: "Engineering",
+      });
+    });
+
+    it("returns 400 when a name is only whitespace", async () => {
+      await http()
+        .post("/api/admin/employees")
+        .set(asAdmin())
+        .send({ ...body, firstName: "   " })
+        .expect(400);
+    });
+
     it("returns 400 for an allowance outside 1–365 days", async () => {
       await http()
         .post("/api/admin/employees")

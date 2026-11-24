@@ -156,9 +156,9 @@ export interface VacationCalendarDay {
   requests: VacationCalendarRequestItem[];
 }
 
-export interface AdminNotificationItem {
+export interface NotificationItem {
   id: string;
-  adminId: string;
+  userId: string;
   type: NotificationType;
   title: string;
   message: string;

@@ -3,8 +3,8 @@ import { redirect } from 'next/navigation';
 import { VacationRequestForm } from '@/components/forms/vacation-request-form';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageShell } from '@/components/layout/page-shell';
-import { todayKey } from '@/lib/absences';
-import { fetchHolidays } from '@/lib/api';
+import { isActiveAbsence, todayKey } from '@/lib/absences';
+import { fetchHolidays, fetchVacations } from '@/lib/api';
 import { requireToken, requireUser } from '@/lib/auth';
 
 export const metadata: Metadata = { title: 'Request time off' };
@@ -17,11 +17,13 @@ export default async function RequestVacationPage() {
 
   const token = requireToken();
   const currentYear = Number(todayKey().slice(0, 4));
-  const holidaysByYear = await Promise.all([
+  const [holidaysThisYear, holidaysNextYear, ownRequests] = await Promise.all([
     fetchHolidays(token, currentYear),
-    fetchHolidays(token, currentYear + 1)
+    fetchHolidays(token, currentYear + 1),
+    fetchVacations(token)
   ]);
-  const holidays = holidaysByYear.flat();
+  const holidays = [...holidaysThisYear, ...holidaysNextYear];
+  const activeRequests = ownRequests.filter((request) => isActiveAbsence(request.status));
 
   return (
     <PageShell user={user} width="medium">
@@ -33,6 +35,7 @@ export default async function RequestVacationPage() {
       <VacationRequestForm
         availableDays={user.vacationDaysTotal - user.vacationDaysUsed}
         holidays={holidays}
+        existingRequests={activeRequests}
       />
     </PageShell>
   );

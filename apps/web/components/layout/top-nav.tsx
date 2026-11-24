@@ -2,26 +2,32 @@ import Link from 'next/link';
 import { AuthUser } from '@vacation/shared';
 import { logoutAction } from '@/app/actions';
 import { Icon } from '@/components/ui/icon';
-import { fetchSummary } from '@/lib/api';
+import { fetchSummary, fetchUnreadNotificationCount } from '@/lib/api';
 import { changePasswordPath, requireToken } from '@/lib/auth';
 import { navItemsFor } from './nav-items';
 import { DesktopNavLinks, MobileTabBar } from './nav-links';
+import { NotificationsBell } from './notifications-bell';
 import { ThemeToggle } from './theme-toggle';
 
 function initials(user: AuthUser): string {
   return `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase();
 }
 
-async function pendingApprovalCount(user: AuthUser): Promise<number> {
+async function pendingApprovalCount(user: AuthUser, token: string): Promise<number> {
   if (user.role !== 'ADMIN') {
     return 0;
   }
-  const summary = await fetchSummary(requireToken());
+  const summary = await fetchSummary(token);
   return 'pendingApprovals' in summary ? summary.pendingApprovals : 0;
 }
 
 export async function TopNav({ user }: { user: AuthUser }) {
-  const items = navItemsFor(user.role, await pendingApprovalCount(user));
+  const token = requireToken();
+  const [pendingApprovals, unread] = await Promise.all([
+    pendingApprovalCount(user, token),
+    fetchUnreadNotificationCount(token)
+  ]);
+  const items = navItemsFor(user.role, pendingApprovals);
 
   return (
     <>
@@ -37,6 +43,7 @@ export async function TopNav({ user }: { user: AuthUser }) {
             <DesktopNavLinks items={items} />
           </div>
           <div className="flex items-center gap-2">
+            <NotificationsBell unreadCount={unread.unread} />
             <ThemeToggle />
             <Link
               href={changePasswordPath}

@@ -3,8 +3,8 @@ import { AdminDashboard } from '@/components/dashboard/admin-dashboard';
 import { EmployeeDashboard } from '@/components/dashboard/employee-dashboard';
 import { PageShell } from '@/components/layout/page-shell';
 import {
-  fetchAdminNotifications,
-  fetchAdminUnreadNotificationCount,
+  fetchNotifications,
+  fetchUnreadNotificationCount,
   fetchEmployees,
   fetchSummary,
   fetchTeamAbsences,
@@ -35,8 +35,8 @@ async function AdminDashboardSection({ token }: { token: string }) {
   const [requests, employees, notifications, unread] = await Promise.all([
     fetchVacations(token),
     fetchEmployees(token),
-    fetchAdminNotifications(token),
-    fetchAdminUnreadNotificationCount(token)
+    fetchNotifications(token),
+    fetchUnreadNotificationCount(token)
   ]);
 
   return (
@@ -51,10 +51,18 @@ async function AdminDashboardSection({ token }: { token: string }) {
 
 async function EmployeeDashboardSection({ user, token }: { user: AuthUser; token: string }) {
   const week = workWeekKeys();
-  const [summary, teamAbsences] = await Promise.all([
+  const [summary, teamAbsences, unreadNotifications] = await Promise.all([
     fetchSummary(token) as Promise<EmployeeSummaryResponse>,
-    fetchTeamAbsences(token, week[0], week[week.length - 1])
+    fetchTeamAbsences(token, week[0], week[week.length - 1]),
+    fetchNotifications(token, true)
   ]);
 
-  return <EmployeeDashboard user={user} summary={summary} teamAbsences={teamAbsences} />;
+  return (
+    <EmployeeDashboard
+      user={user}
+      summary={summary}
+      teamAbsences={teamAbsences}
+      unreadNotifications={unreadNotifications}
+    />
+  );
 }

@@ -87,6 +87,23 @@ describe("Vacation endpoints", () => {
       expect(response.body.message).toBe("Not enough remaining vacation days");
     });
 
+    it("returns 409 when the dates overlap existing time off", async () => {
+      testApp.prisma.user.findUnique.mockResolvedValue(buildUser());
+      testApp.prisma.vacationRequest.findFirst.mockResolvedValue(
+        buildRequest({ status: VacationStatus.APPROVED }),
+      );
+
+      const response = await http()
+        .post("/api/vacations")
+        .set(asEmployee())
+        .send(body)
+        .expect(409);
+
+      expect(response.body.message).toBe(
+        "These dates overlap approved time off from 9 Mar 2026 – 13 Mar 2026.",
+      );
+    });
+
     it("returns 403 for admins", async () => {
       await http().post("/api/vacations").set(asAdmin()).send(body).expect(403);
     });

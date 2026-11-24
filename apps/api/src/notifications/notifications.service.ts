@@ -13,8 +13,9 @@ import {
   VacationStatus,
 } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { MailerService } from "./mailer.service";
 
-interface NotificationPayload {
+export interface NotificationPayload {
   type: NotificationType;
   title: string;
   message: string;
@@ -29,6 +30,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly mailer: MailerService,
   ) {}
 
   onModuleInit() {
@@ -62,38 +64,45 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async createForAllAdmins(payload: NotificationPayload) {
-    const admins = await this.prisma.user.findMany({
-      where: {
-        role: UserRole.ADMIN,
-        isActive: true,
-      },
-      select: { id: true },
-    });
-
+    const admins = await this.activeAdmins();
     if (admins.length === 0) {
       return;
     }
 
-    await this.prisma.adminNotification.createMany({
-      data: admins.map((admin) => ({
-        adminId: admin.id,
-        type: payload.type,
-        title: payload.title,
-        message: payload.message,
-        metadata: payload.metadata,
-      })),
+    await this.prisma.notification.createMany({
+      data: admins.map((admin) => ({ userId: admin.id, ...payload })),
     });
   }
 
   async createAndDispatch(payload: NotificationPayload) {
     await this.createForAllAdmins(payload);
-    await this.dispatchExternal(payload);
+    await Promise.all([this.sendSlack(payload), this.emailAdmins(payload)]);
   }
 
-  async listAdminNotifications(adminId: string, unreadOnly = false) {
-    return this.prisma.adminNotification.findMany({
+  async notifyEmployee(userId: string, payload: NotificationPayload) {
+    const employee = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, isActive: true },
+    });
+    if (!employee) {
+      return;
+    }
+
+    await this.prisma.notification.create({ data: { userId, ...payload } });
+
+    if (employee.isActive) {
+      await this.mailer.send({
+        to: [employee.email],
+        subject: payload.title,
+        text: payload.message,
+      });
+    }
+  }
+
+  listForUser(userId: string, unreadOnly = false) {
+    return this.prisma.notification.findMany({
       where: {
-        adminId,
+        userId,
         ...(unreadOnly ? { isRead: false } : {}),
       },
       orderBy: { createdAt: "desc" },
@@ -101,38 +110,32 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  async getUnreadCount(adminId: string) {
-    const unread = await this.prisma.adminNotification.count({
-      where: { adminId, isRead: false },
+  async getUnreadCount(userId: string) {
+    const unread = await this.prisma.notification.count({
+      where: { userId, isRead: false },
     });
 
     return { unread };
   }
 
-  async markAsRead(adminId: string, notificationId: string) {
-    const existing = await this.prisma.adminNotification.findFirst({
-      where: {
-        id: notificationId,
-        adminId,
-      },
+  async markAsRead(userId: string, notificationId: string) {
+    const existing = await this.prisma.notification.findFirst({
+      where: { id: notificationId, userId },
     });
 
     if (!existing) {
       throw new NotFoundException("Notification not found");
     }
 
-    return this.prisma.adminNotification.update({
+    return this.prisma.notification.update({
       where: { id: notificationId },
       data: { isRead: true },
     });
   }
 
-  async markAllAsRead(adminId: string) {
-    await this.prisma.adminNotification.updateMany({
-      where: {
-        adminId,
-        isRead: false,
-      },
+  async markAllAsRead(userId: string) {
+    await this.prisma.notification.updateMany({
+      where: { userId, isRead: false },
       data: { isRead: true },
     });
 
@@ -162,8 +165,11 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private async dispatchExternal(payload: NotificationPayload) {
-    await Promise.all([this.sendSlack(payload), this.sendEmail(payload)]);
+  private activeAdmins() {
+    return this.prisma.user.findMany({
+      where: { role: UserRole.ADMIN, isActive: true },
+      select: { id: true, email: true },
+    });
   }
 
   private async sendSlack(payload: NotificationPayload) {
@@ -179,66 +185,16 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     }).catch(() => undefined);
   }
 
-  private async sendEmail(payload: NotificationPayload) {
-    if (!this.resendSettings()) {
+  private async emailAdmins(payload: NotificationPayload) {
+    if (!this.mailer.isEnabled()) {
       return;
     }
 
-    const admins = await this.prisma.user.findMany({
-      where: {
-        role: UserRole.ADMIN,
-        isActive: true,
-      },
-      select: { email: true },
+    const admins = await this.activeAdmins();
+    await this.mailer.send({
+      to: admins.map((admin) => admin.email),
+      subject: payload.title,
+      text: payload.message,
     });
-
-    await this.sendResendEmail(
-      admins.map((admin) => admin.email),
-      payload.title,
-      payload.message,
-    );
-  }
-
-  async notifyEmployee(userId: string, subject: string, text: string) {
-    if (!this.resendSettings()) {
-      return;
-    }
-
-    const employee = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { email: true, isActive: true },
-    });
-    if (!employee?.isActive) {
-      return;
-    }
-
-    await this.sendResendEmail([employee.email], subject, text);
-  }
-
-  private resendSettings(): { apiKey: string; from: string } | null {
-    const provider = this.config.get<string>("EMAIL_PROVIDER", "");
-    const apiKey = this.config.get<string>("RESEND_API_KEY");
-    const from = this.config.get<string>("EMAIL_FROM");
-
-    if (provider !== "resend" || !apiKey || !from) {
-      return null;
-    }
-    return { apiKey, from };
-  }
-
-  private async sendResendEmail(to: string[], subject: string, text: string) {
-    const settings = this.resendSettings();
-    if (!settings || to.length === 0) {
-      return;
-    }
-
-    await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${settings.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ from: settings.from, to, subject, text }),
-    }).catch(() => undefined);
   }
 }

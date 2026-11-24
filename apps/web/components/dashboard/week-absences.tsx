@@ -1,7 +1,5 @@
 import { VacationRequest } from '@vacation/shared';
-import { isActiveAbsence, overlapsRange, todayKey, workWeekKeys } from '@/lib/absences';
-import { toDateKey } from '@/lib/dates';
-import { absenceTypeLabels } from '@/lib/labels';
+import { coversDate, isActiveAbsence, overlapsRange, todayKey, workWeekKeys } from '@/lib/absences';
 import { requesterName } from '@/lib/people';
 
 const weekdayFormatter = new Intl.DateTimeFormat('en-GB', {
@@ -10,36 +8,69 @@ const weekdayFormatter = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'UTC'
 });
 
-interface WeekRow {
-  request: VacationRequest;
-  startIndex: number;
-  endIndex: number;
+type DayKind = 'sick' | 'vacation' | 'pending';
+
+interface WeekSegment {
+  kind: DayKind | null;
+  span: number;
 }
 
-function toWeekRows(requests: VacationRequest[], weekKeys: string[]): WeekRow[] {
+interface PersonRow {
+  userId: string;
+  name: string;
+  segments: WeekSegment[];
+}
+
+const kindPriority: DayKind[] = ['sick', 'vacation', 'pending'];
+
+const kindStyles: Record<DayKind, { label: string; className: string }> = {
+  sick: { label: 'Sick leave', className: 'bg-sick-soft text-sick' },
+  vacation: { label: 'Vacation', className: 'bg-primary text-white' },
+  pending: { label: 'Pending', className: 'border-2 border-dashed border-warning bg-warning-soft text-warning' }
+};
+
+function kindOf(request: VacationRequest): DayKind {
+  if (request.absenceType === 'SICK') {
+    return 'sick';
+  }
+  return request.status === 'PENDING' ? 'pending' : 'vacation';
+}
+
+function dayKind(requests: VacationRequest[], dateKey: string): DayKind | null {
+  const kinds = new Set(requests.filter((request) => coversDate(request, dateKey)).map(kindOf));
+  return kindPriority.find((kind) => kinds.has(kind)) ?? null;
+}
+
+function toSegments(requests: VacationRequest[], weekKeys: string[]): WeekSegment[] {
+  return weekKeys.reduce<WeekSegment[]>((segments, key) => {
+    const kind = dayKind(requests, key);
+    const last = segments[segments.length - 1];
+    if (last && last.kind === kind) {
+      last.span += 1;
+      return segments;
+    }
+    return [...segments, { kind, span: 1 }];
+  }, []);
+}
+
+function toPersonRows(requests: VacationRequest[], weekKeys: string[]): PersonRow[] {
   const firstKey = weekKeys[0];
   const lastKey = weekKeys[weekKeys.length - 1];
-  return requests
+  const byPerson = new Map<string, VacationRequest[]>();
+  requests
     .filter((request) => isActiveAbsence(request.status) && overlapsRange(request, firstKey, lastKey))
-    .sort((a, b) => a.startDate.localeCompare(b.startDate))
-    .map((request) => {
-      const startKey = toDateKey(request.startDate);
-      const endKey = toDateKey(request.endDate);
-      const startIndex = weekKeys.findIndex((key) => key >= startKey);
-      const endIndex = weekKeys.reduce((last, key, index) => (key <= endKey ? index : last), 0);
-      return { request, startIndex, endIndex };
+    .forEach((request) => {
+      byPerson.set(request.userId, [...(byPerson.get(request.userId) ?? []), request]);
     });
-}
 
-function barClassName(request: VacationRequest): string {
-  if (request.status === 'PENDING') {
-    return 'border-2 border-dashed border-warning bg-warning-soft text-warning';
-  }
-  return request.absenceType === 'SICK' ? 'bg-sick-soft text-sick' : 'bg-primary text-white';
-}
-
-function barLabel(request: VacationRequest): string {
-  return request.status === 'PENDING' ? 'Pending' : absenceTypeLabels[request.absenceType];
+  return Array.from(byPerson, ([userId, personRequests]) => ({
+    userId,
+    name: requesterName(personRequests[0]),
+    firstDay: personRequests.map((request) => request.startDate).sort()[0],
+    segments: toSegments(personRequests, weekKeys)
+  }))
+    .sort((a, b) => a.firstDay.localeCompare(b.firstDay) || a.name.localeCompare(b.name))
+    .map(({ userId, name, segments }) => ({ userId, name, segments }));
 }
 
 function LegendSwatch({ className, label }: { className: string; label: string }) {
@@ -54,7 +85,7 @@ function LegendSwatch({ className, label }: { className: string; label: string }
 export function WeekAbsences({ requests }: { requests: VacationRequest[] }) {
   const weekKeys = workWeekKeys();
   const today = todayKey();
-  const rows = toWeekRows(requests, weekKeys);
+  const rows = toPersonRows(requests, weekKeys);
 
   return (
     <section aria-labelledby="week-title" className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-6">
@@ -91,20 +122,22 @@ export function WeekAbsences({ requests }: { requests: VacationRequest[] }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ request, startIndex, endIndex }) => (
-                <tr key={request.id}>
+              {rows.map((row) => (
+                <tr key={row.userId}>
                   <th scope="row" className="pr-2 text-left font-semibold">
-                    {requesterName(request)}
+                    {row.name}
                   </th>
-                  {startIndex > 0 ? <td colSpan={startIndex} /> : null}
-                  <td colSpan={endIndex - startIndex + 1} className="px-1">
-                    <div
-                      className={`flex h-[34px] items-center rounded-[9px] px-3 text-[13px] font-semibold ${barClassName(request)}`}
-                    >
-                      {barLabel(request)}
-                    </div>
-                  </td>
-                  {endIndex < weekKeys.length - 1 ? <td colSpan={weekKeys.length - 1 - endIndex} /> : null}
+                  {row.segments.map((segment, index) => (
+                    <td key={index} colSpan={segment.span} className="px-1">
+                      {segment.kind ? (
+                        <div
+                          className={`flex h-[34px] items-center rounded-[9px] px-3 text-[13px] font-semibold ${kindStyles[segment.kind].className}`}
+                        >
+                          {kindStyles[segment.kind].label}
+                        </div>
+                      ) : null}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>

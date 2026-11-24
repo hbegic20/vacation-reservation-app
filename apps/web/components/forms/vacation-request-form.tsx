@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { PublicHoliday } from '@vacation/shared';
+import { PublicHoliday, VacationRequest } from '@vacation/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { createVacationAction } from '@/app/actions';
-import { countWorkingDays, localDateKey, toDateKey } from '@/lib/dates';
+import { overlapsRange } from '@/lib/absences';
+import { countWorkingDays, formatDateRange, localDateKey, toDateKey } from '@/lib/dates';
 import { plural } from '@/lib/people';
 import { Button, buttonStyles } from '../ui/button';
 import { FormMessage } from '../ui/form-message';
@@ -27,12 +28,30 @@ function SubmitButton({ blocked }: { blocked: boolean }) {
   );
 }
 
-function rangeError(range: DateRange, workingDays: number, availableDays: number): string | null {
+function overlapDescription(request: VacationRequest): string {
+  if (request.absenceType === 'SICK') {
+    return 'sick leave';
+  }
+  return request.status === 'PENDING' ? 'a pending request' : 'approved time off';
+}
+
+function rangeError(
+  range: DateRange,
+  workingDays: number,
+  availableDays: number,
+  existingRequests: VacationRequest[]
+): string | null {
   if (range.startDate === '' || range.endDate === '') {
     return null;
   }
   if (range.endDate < range.startDate) {
     return 'The last day can’t be before the first day.';
+  }
+  const overlapping = existingRequests.find((request) =>
+    overlapsRange(request, range.startDate, range.endDate)
+  );
+  if (overlapping) {
+    return `These dates overlap ${overlapDescription(overlapping)} from ${formatDateRange(overlapping.startDate, overlapping.endDate)}.`;
   }
   if (workingDays === 0) {
     return 'Pick at least one working day.';
@@ -55,6 +74,7 @@ function SummaryRow({ label, value, emphasis }: { label: string; value: string; 
 interface VacationRequestFormProps {
   availableDays: number;
   holidays: PublicHoliday[];
+  existingRequests: VacationRequest[];
 }
 
 function isWeekday(dateKey: string): boolean {
@@ -62,7 +82,7 @@ function isWeekday(dateKey: string): boolean {
   return weekday !== 0 && weekday !== 6;
 }
 
-export function VacationRequestForm({ availableDays, holidays }: VacationRequestFormProps) {
+export function VacationRequestForm({ availableDays, holidays, existingRequests }: VacationRequestFormProps) {
   const [state, formAction] = useFormState(createVacationAction, initialState);
   const formRef = useResetOnSuccess(state);
   const [range, setRange] = useState<DateRange>(emptyRange);
@@ -82,7 +102,7 @@ export function VacationRequestForm({ availableDays, holidays }: VacationRequest
         return key >= range.startDate && key <= range.endDate && isWeekday(key);
       })
     : [];
-  const error = rangeError(range, workingDays, availableDays);
+  const error = rangeError(range, workingDays, availableDays, existingRequests);
   const leftAfter = availableDays - workingDays;
   const today = localDateKey(new Date());
 

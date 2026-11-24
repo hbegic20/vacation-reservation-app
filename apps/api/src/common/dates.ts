@@ -28,3 +28,16 @@ export function countWorkingDays(
   }
   return workingDays;
 }
+
+const dateFormatter = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+export function formatDateRange(startDate: Date, endDate: Date): string {
+  const start = dateFormatter.format(startDate);
+  const end = dateFormatter.format(endDate);
+  return start === end ? start : `${start} – ${end}`;
+}

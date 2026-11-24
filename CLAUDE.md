@@ -1,6 +1,6 @@
 # Vacation Reservation App
 
-Internal leave management tool. Employees request vacation and see their remaining days. Admins approve or reject requests, manage employee and admin accounts, record sick leave, and see a company-wide year calendar. Optional Slack and email (Resend) notifications, plus a daily digest of pending approvals at 08:00 UTC.
+Internal leave management tool. Employees request vacation and see their remaining days. Admins approve or reject requests, manage employee and admin accounts, record sick leave, and see a company-wide year calendar. In-app notifications for admins and employees, optional email (SMTP or Resend) and Slack, plus a daily digest of pending approvals at 08:00 UTC.
 
 This file applies to this repo only. Ignore the SpeedCoach `CLAUDE.md` in the parent folder: its stack, commands and design rules do not apply here.
 
@@ -30,7 +30,7 @@ apps/api/
     users/             employee and admin management (/api/admin/*)
     vacations/         requests, approvals, cancellation, sick leave, calendar, summary, team absences
     holidays/          public holidays and holiday-aware working-day counts
-    notifications/     in-app admin notifications, Slack/email, daily digest
+    notifications/     in-app notifications for any user, MailerService (SMTP/Resend), Slack, daily digest
     common/            @Roles decorator, RolesGuard, @CurrentUser
     prisma/            PrismaService
 apps/web/
@@ -46,7 +46,7 @@ docker-compose.yml     postgres only
 Run from the repo root.
 
 ```
-docker compose up -d                          # postgres on :5432
+docker compose up -d                          # postgres on :5432, Mailpit (SMTP :1025, inbox http://localhost:8025)
 npm install
 cp apps/api/.env.example apps/api/.env        # set JWT_SECRET
 cp apps/web/.env.example apps/web/.env.local
@@ -79,6 +79,8 @@ The developer often has `npm run dev` running already. Check ports 3000 and 4000
 - A request is an active absence only when it is `PENDING` or `APPROVED`. `REJECTED` and `CANCELLED` never count toward calendars, overlaps or balances.
 - Accounts created or reset by an admin get `mustChangePassword: true`; `POST /auth/change-password` clears it.
 - Never expose another employee's absence type or reason to employees (the team endpoint returns names and dates only).
+- Notifications belong to one user (`Notification.userId`). Notify admins with `NotificationsService.createAndDispatch` and an employee with `notifyEmployee`; both store the in-app notification first, then send email through `MailerService`, which never throws when mail fails.
+- The API reads `apps/api/.env` only at startup. After changing it, ask the developer to restart `npm run dev`.
 - When you add or change an endpoint, update `packages/shared` types and the README endpoint list.
 
 ## Frontend conventions
