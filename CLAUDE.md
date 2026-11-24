@@ -63,7 +63,7 @@ Seed logins: `admin@company.com` / `admin1234`, `john.employee@company.com` / `e
 
 Before reporting a task as done, run lint and the web typecheck and fix any failures; don't silence them. `tsc --noEmit` writes `apps/web/tsconfig.tsbuildinfo`, so delete it afterwards. Do not run `npm run build` while `npm run dev` is running, because both write to `.next`. There are no tests yet. When you add them, test behavior, not implementation.
 
-The developer often has `npm run dev` running already. Check ports 3000 and 4000 before starting another copy.
+The developer often has `npm run dev` running already. Check ports 3000 and 4000 before starting another copy. The Next dev server does not reload `tailwind.config.ts`, so after changing it, ask the developer to restart `npm run dev`; until then, new utility classes are missing from the page.
 
 ## Backend conventions
 

@@ -5,7 +5,9 @@ import { useEffect, useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { createVacationAction } from '@/app/actions';
 import { countWorkingDays, localDateKey } from '@/lib/dates';
+import { plural } from '@/lib/people';
 import { Button, buttonStyles } from '../ui/button';
+import { FormMessage } from '../ui/form-message';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { useResetOnSuccess } from './use-reset-on-success';
@@ -116,16 +118,16 @@ export function VacationRequestForm({ availableDays }: { availableDays: number }
           <Textarea id="reason" name="reason" required rows={4} maxLength={500} />
           <p className="text-[13px] text-muted-foreground">Only you and admins can see this.</p>
         </div>
-        {state.error ? (
-          <p role="alert" className="text-sm text-danger">
-            {state.error}
-          </p>
-        ) : null}
-        {state.success ? (
-          <p role="status" className="text-sm font-medium text-success">
-            Request sent. You’ll get an answer from an admin soon.
-          </p>
-        ) : null}
+        <FormMessage
+          state={state}
+          successTitle="Request sent"
+          successText="An admin will review it soon. You’ll see the answer under My requests."
+          successAction={
+            <Link href="/vacations" className="font-semibold text-primary-text underline underline-offset-2">
+              View my requests
+            </Link>
+          }
+        />
         <div className="flex flex-wrap gap-2.5">
           <SubmitButton blocked={error !== null} />
           <Link href="/dashboard" className={buttonStyles('secondary', 'min-h-12 px-5 text-[15px]')}>
@@ -142,23 +144,39 @@ export function VacationRequestForm({ availableDays }: { availableDays: number }
         <h2 id="summary-title" className="font-display text-[17px] font-semibold">
           Summary
         </h2>
-        <div>
-          <p className="font-display text-[44px] font-bold leading-none">{workingDays}</p>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            {workingDays === 1 ? 'working day' : 'working days'}
-          </p>
-        </div>
-        <dl className="grid gap-2.5 rounded-xl bg-muted p-3.5 text-sm">
-          <SummaryRow label="Available now" value={`${availableDays} days`} />
-          <SummaryRow label="This request" value={`−${workingDays} days`} />
-          <div className="border-t border-border pt-2.5">
-            <SummaryRow
-              label="Left afterwards"
-              value={`${leftAfter} days`}
-              emphasis={`font-bold ${leftAfter < 0 ? 'text-danger' : 'text-success'}`}
-            />
-          </div>
-        </dl>
+        {hasRange ? (
+          <>
+            <div>
+              <p className="font-display text-[44px] font-bold leading-none">{workingDays}</p>
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                {workingDays === 1 ? 'working day' : 'working days'}
+              </p>
+            </div>
+            <dl className="grid gap-2.5 rounded-xl bg-muted p-3.5 text-sm">
+              <SummaryRow label="Available now" value={plural(availableDays, 'day')} />
+              <SummaryRow
+                label="This request"
+                value={workingDays > 0 ? `−${plural(workingDays, 'day')}` : plural(0, 'day')}
+              />
+              <div className="border-t border-border pt-2.5">
+                <SummaryRow
+                  label="Left afterwards"
+                  value={plural(leftAfter, 'day')}
+                  emphasis={`font-bold ${leftAfter < 0 ? 'text-danger' : 'text-success'}`}
+                />
+              </div>
+            </dl>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Pick your first and last day off to see how many days this uses.
+            </p>
+            <dl className="grid gap-2.5 rounded-xl bg-muted p-3.5 text-sm">
+              <SummaryRow label="Available now" value={plural(availableDays, 'day')} />
+            </dl>
+          </>
+        )}
         <p className="text-[13px] text-muted-foreground">
           Weekends are not counted. Public holidays are not counted yet.
         </p>
