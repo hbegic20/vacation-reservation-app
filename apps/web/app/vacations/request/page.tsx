@@ -1,8 +1,11 @@
+import type { Metadata } from 'next';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { VacationRequestForm } from '@/components/forms/vacation-request-form';
 import { TopNav } from '@/components/layout/top-nav';
-import { Card } from '@/components/ui/card';
 import { requireUser } from '@/lib/auth';
+
+export const metadata: Metadata = { title: 'Request time off' };
 
 export default async function RequestVacationPage() {
   const user = await requireUser();
@@ -13,16 +16,17 @@ export default async function RequestVacationPage() {
   return (
     <div>
       <TopNav user={user} />
-      <main className="mx-auto max-w-3xl p-4 md:p-6">
-        <Card className="space-y-4">
-          <div>
-            <h1 className="text-2xl font-bold">Request Vacation</h1>
-            <p className="text-sm text-muted-foreground">
-              Fill in your dates and reason. Your request will be reviewed by HR/admin.
-            </p>
-          </div>
-          <VacationRequestForm />
-        </Card>
+      <main className="mx-auto flex max-w-5xl flex-col gap-6 px-4 pb-14 pt-9 md:px-6">
+        <div>
+          <Link href="/dashboard" className="text-sm font-semibold text-primary-text">
+            ← Back to dashboard
+          </Link>
+          <h1 className="mt-2.5 font-display text-[34px] font-bold leading-tight tracking-tight">
+            Request time off
+          </h1>
+          <p className="mt-1.5 text-muted-foreground">Admins get a notification as soon as you send this.</p>
+        </div>
+        <VacationRequestForm availableDays={user.vacationDaysTotal - user.vacationDaysUsed} />
       </main>
     </div>
   );

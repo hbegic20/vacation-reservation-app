@@ -1,12 +1,11 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { VacationRequest, VacationStatus } from '@vacation/shared';
+import { EmployeeListItem, VacationRequest, VacationStatus } from '@vacation/shared';
 import { TopNav } from '@/components/layout/top-nav';
-import { ReviewRequestModal } from '@/components/forms/review-request-modal';
-import { StatusBadge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
-import { fetchVacations } from '@/lib/api';
+import { RequestReviewCard } from '@/components/requests/request-review-card';
+import { overlappingTeammates } from '@/lib/absences';
+import { fetchEmployees, fetchVacations } from '@/lib/api';
 import { requireAdmin, requireToken } from '@/lib/auth';
-import { formatDateRange } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 
 type StatusFilter = VacationStatus | 'ALL';
@@ -18,11 +17,11 @@ const statusFilters: { value: StatusFilter; label: string }[] = [
   { value: 'ALL', label: 'All' }
 ];
 
-const emptyMessages: Record<StatusFilter, string> = {
-  PENDING: 'No requests are waiting for approval.',
-  APPROVED: 'No approved requests yet.',
-  REJECTED: 'No rejected requests.',
-  ALL: 'No requests have been submitted yet.'
+const emptyMessages: Record<StatusFilter, { title: string; text: string }> = {
+  PENDING: { title: 'All caught up', text: 'No requests are waiting for approval.' },
+  APPROVED: { title: 'Nothing approved yet', text: 'Approved requests will show up here.' },
+  REJECTED: { title: 'No rejections', text: 'Rejected requests will show up here.' },
+  ALL: { title: 'No requests yet', text: 'Requests appear here as soon as employees submit them.' }
 };
 
 interface AdminRequestsPageProps {
@@ -53,22 +52,30 @@ function selectRequests(requests: VacationRequest[], filter: StatusFilter): Vaca
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-function requesterName(request: VacationRequest): string {
-  return request.user ? `${request.user.firstName} ${request.user.lastName}` : request.userId;
+function remainingDaysByEmployee(employees: EmployeeListItem[]): Map<string, number> {
+  return new Map(
+    employees.map((employee) => [employee.id, employee.vacationDaysTotal - employee.vacationDaysUsed])
+  );
 }
+
+export const metadata: Metadata = { title: 'Approvals' };
 
 export default async function AdminRequestsPage({ searchParams }: AdminRequestsPageProps) {
   const user = await requireAdmin();
   const token = requireToken();
-  const requests = await fetchVacations(token);
+  const [requests, employees] = await Promise.all([fetchVacations(token), fetchEmployees(token)]);
   const activeFilter = parseStatusFilter(searchParams.status);
   const visibleRequests = selectRequests(requests, activeFilter);
+  const remainingDays = remainingDaysByEmployee(employees);
 
   return (
     <div>
       <TopNav user={user} />
-      <main className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
-        <h1 className="text-2xl font-bold">Approval Queue</h1>
+      <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 pb-14 pt-9 md:px-6">
+        <div>
+          <h1 className="font-display text-[34px] font-bold leading-tight tracking-tight">Approval queue</h1>
+          <p className="mt-1.5 text-muted-foreground">Oldest requests first. Open one to approve or reject it.</p>
+        </div>
         <nav aria-label="Filter requests by status" className="flex flex-wrap gap-2">
           {statusFilters.map((filter) => {
             const isActive = filter.value === activeFilter;
@@ -78,57 +85,37 @@ export default async function AdminRequestsPage({ searchParams }: AdminRequestsP
                 href={`/admin/requests?status=${filter.value}`}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
-                  'rounded-xl border px-4 py-2 text-sm font-semibold transition-colors',
+                  'inline-flex min-h-11 items-center gap-1 rounded-xl border px-4 text-sm font-semibold transition-colors',
                   isActive
                     ? 'border-primary bg-primary text-white'
-                    : 'border-border bg-card hover:bg-muted/70'
+                    : 'border-border bg-card hover:bg-muted'
                 )}
               >
-                {filter.label} ({countByFilter(requests, filter.value)})
+                {filter.label}
+                <span className="opacity-80">({countByFilter(requests, filter.value)})</span>
               </Link>
             );
           })}
         </nav>
-        <div className="grid gap-4">
-          {visibleRequests.length === 0 ? (
-            <Card>
-              <p className="text-sm text-muted-foreground">{emptyMessages[activeFilter]}</p>
-            </Card>
-          ) : null}
-          {visibleRequests.map((request) => (
-            <Card key={request.id} className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold">{requesterName(request)}</p>
-                  {request.user ? (
-                    <p className="text-xs text-muted-foreground">
-                      {request.user.email}
-                      {request.user.department ? ` · ${request.user.department}` : ''}
-                    </p>
-                  ) : null}
-                  <p className="text-sm text-muted-foreground">
-                    {formatDateRange(request.startDate, request.endDate)}
-                  </p>
-                </div>
-                <StatusBadge status={request.status} />
-              </div>
-              <p className="text-sm">
-                {request.absenceType} · {request.reason}
-              </p>
-              {request.status === 'PENDING' ? (
-                <ReviewRequestModal
-                  requestId={request.id}
-                  title={requesterName(request)}
-                  subtitle={formatDateRange(request.startDate, request.endDate)}
-                />
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  {request.adminComment || 'No admin comment provided.'}
-                </p>
-              )}
-            </Card>
-          ))}
-        </div>
+        {visibleRequests.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-input bg-card px-6 py-12 text-center">
+            <p className="font-display text-xl font-semibold">{emptyMessages[activeFilter].title}</p>
+            <p className="mt-1 text-muted-foreground">{emptyMessages[activeFilter].text}</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3.5">
+            {visibleRequests.map((request) => (
+              <RequestReviewCard
+                key={request.id}
+                request={request}
+                remainingDays={remainingDays.get(request.userId) ?? null}
+                overlappingTeammates={
+                  request.status === 'PENDING' ? overlappingTeammates(request, requests) : []
+                }
+              />
+            ))}
+          </div>
+        )}
       </main>
     </div>
   );

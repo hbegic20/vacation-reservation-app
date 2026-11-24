@@ -3,25 +3,45 @@
 @tailwind utilities;
 
 :root {
-  --background: 210 40% 98%;
-  --foreground: 220 22% 14%;
+  --background: 220 14% 97%;
+  --foreground: 222 47% 11%;
   --card: 0 0% 100%;
-  --muted: 210 30% 94%;
-  --muted-foreground: 217 15% 45%;
-  --primary: 201 90% 40%;
-  --accent: 173 58% 39%;
-  --border: 220 20% 88%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 19% 35%;
+  --primary: 224 76% 48%;
+  --primary-soft: 222 100% 97%;
+  --primary-text: 224 76% 48%;
+  --border: 214 32% 91%;
+  --input: 216 16% 56%;
+  --success: 161 94% 24%;
+  --success-soft: 152 81% 96%;
+  --warning: 26 90% 37%;
+  --warning-soft: 48 100% 96%;
+  --danger: 0 74% 42%;
+  --danger-soft: 0 86% 97%;
+  --sick: 263 70% 50%;
+  --sick-soft: 250 100% 98%;
 }
 
 .dark {
-  --background: 222 47% 11%;
-  --foreground: 210 40% 96%;
-  --card: 222 42% 16%;
-  --muted: 223 35% 22%;
-  --muted-foreground: 215 20% 70%;
-  --primary: 198 93% 60%;
-  --accent: 173 58% 39%;
-  --border: 220 25% 28%;
+  --background: 222 49% 8%;
+  --foreground: 214 32% 91%;
+  --card: 221 39% 11%;
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20% 65%;
+  --primary: 221 83% 53%;
+  --primary-soft: 226 57% 21%;
+  --primary-text: 213 94% 78%;
+  --border: 217 30% 22%;
+  --input: 215 16% 47%;
+  --success: 156 72% 67%;
+  --success-soft: 164 86% 16%;
+  --warning: 46 97% 65%;
+  --warning-soft: 21 92% 14%;
+  --danger: 0 94% 82%;
+  --danger-soft: 0 75% 15%;
+  --sick: 252 95% 85%;
+  --sick-soft: 261 73% 23%;
 }
 
 * {
@@ -30,9 +50,17 @@
 
 body {
   min-height: 100vh;
-  font-family: Manrope, Avenir Next, Segoe UI, sans-serif;
-  background: radial-gradient(circle at top right, hsl(var(--accent) / 0.12), transparent 32%),
-    radial-gradient(circle at 10% 10%, hsl(var(--primary) / 0.12), transparent 28%),
-    hsl(var(--background));
+  background: hsl(var(--background));
   color: hsl(var(--foreground));
+}
+
+:focus-visible {
+  outline: 2px solid hsl(var(--primary-text));
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  body:has(#mobile-tab-bar) {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
 }

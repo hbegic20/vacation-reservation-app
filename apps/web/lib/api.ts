@@ -73,15 +73,6 @@ export async function fetchVacations(token: string) {
   return parseJson<VacationRequest[]>(response);
 }
 
-export async function fetchApprovedVacations(token: string) {
-  const response = await fetch(`${API_URL}/vacations/approved`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store'
-  });
-
-  return parseJson<VacationRequest[]>(response);
-}
-
 export async function createVacationRequest(
   token: string,
   payload: CreateVacationRequestPayload

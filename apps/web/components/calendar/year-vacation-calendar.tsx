@@ -12,6 +12,7 @@ import {
 } from 'date-fns';
 import { useMemo, useState } from 'react';
 import { formatDateRange, formatLongDate, localDateKey } from '@/lib/dates';
+import { absenceTypeLabels, statusLabels } from '@/lib/labels';
 
 interface YearVacationCalendarProps {
   year: number;
@@ -54,7 +55,7 @@ export function YearVacationCalendar({ year, days }: YearVacationCalendarProps) 
           return (
             <div
               key={month.toISOString()}
-              className="rounded-2xl border border-border bg-card p-3 shadow-soft"
+              className="rounded-2xl border border-border bg-card p-3"
             >
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-semibold">{format(month, 'MMMM yyyy')}</h3>
@@ -97,7 +98,7 @@ export function YearVacationCalendar({ year, days }: YearVacationCalendarProps) 
                                   {request.user.firstName} {request.user.lastName}
                                 </p>
                                 <p className="text-muted-foreground">
-                                  {request.absenceType} · {request.status}
+                                  {absenceTypeLabels[request.absenceType]} · {statusLabels[request.status]}
                                 </p>
                                 <p className="line-clamp-1 text-muted-foreground">{request.reason}</p>
                               </div>
@@ -114,7 +115,7 @@ export function YearVacationCalendar({ year, days }: YearVacationCalendarProps) 
         })}
       </div>
 
-      <aside className="h-fit rounded-2xl border border-border bg-card p-4 shadow-soft xl:sticky xl:top-20">
+      <aside className="h-fit rounded-2xl border border-border bg-card p-4 xl:sticky xl:top-20">
         <h3 className="text-sm font-semibold">Day Details</h3>
         <p className="mt-1 text-xs text-muted-foreground">
           {selectedDate ? formatLongDate(selectedDate) : 'Select a date'}
@@ -135,7 +136,7 @@ export function YearVacationCalendar({ year, days }: YearVacationCalendarProps) 
                 {request.user.department ? ` · ${request.user.department}` : ''}
               </p>
               <p className="mt-1 text-xs">
-                {request.absenceType} · {request.status}
+                {absenceTypeLabels[request.absenceType]} · {statusLabels[request.status]}
               </p>
               <p className="text-xs text-muted-foreground">
                 {formatDateRange(request.startDate, request.endDate)}

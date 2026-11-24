@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId } from 'react';
+import { useId } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { moderateVacationAction } from '@/app/actions';
 import { Button } from '../ui/button';
@@ -26,6 +26,7 @@ function DecisionButton({ action }: { action: ModerationAction }) {
       value={action}
       variant={action === 'approve' ? 'primary' : 'danger'}
       disabled={pending}
+      className="px-5"
     >
       {isThisActionPending ? actionLabels[action].pending : actionLabels[action].idle}
     </Button>
@@ -34,35 +35,33 @@ function DecisionButton({ action }: { action: ModerationAction }) {
 
 interface ModerateRequestFormProps {
   requestId: string;
-  onDecided: () => void;
+  employeeFirstName: string;
 }
 
-export function ModerateRequestForm({ requestId, onDecided }: ModerateRequestFormProps) {
+export function ModerateRequestForm({ requestId, employeeFirstName }: ModerateRequestFormProps) {
   const [state, formAction] = useFormState(moderateVacationAction, initialState);
   const commentId = useId();
 
-  useEffect(() => {
-    if (state.success) {
-      onDecided();
-    }
-  }, [state, onDecided]);
-
   return (
-    <form action={formAction} className="space-y-3">
+    <form action={formAction} className="flex flex-col gap-3">
       <input type="hidden" name="requestId" value={requestId} />
-      <div className="space-y-2">
-        <label htmlFor={commentId} className="text-sm font-medium">
-          Comment (optional)
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={commentId} className="text-sm font-semibold">
+          Comment for {employeeFirstName} (optional)
         </label>
         <Textarea
           id={commentId}
           name="adminComment"
-          rows={3}
+          rows={2}
           placeholder="Shown to the employee, e.g. the reason for a rejection"
         />
       </div>
-      {state.error ? <p className="text-sm text-red-600">{state.error}</p> : null}
-      <div className="flex gap-2">
+      {state.error ? (
+        <p role="alert" className="text-sm text-danger">
+          {state.error}
+        </p>
+      ) : null}
+      <div className="flex flex-wrap gap-2.5">
         <DecisionButton action="approve" />
         <DecisionButton action="reject" />
       </div>

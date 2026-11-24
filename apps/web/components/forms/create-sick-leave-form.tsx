@@ -24,7 +24,7 @@ export function CreateSickLeaveForm({ employees }: { employees: EmployeeListItem
   const formRef = useResetOnSuccess(state);
 
   return (
-    <form ref={formRef} action={formAction} className="space-y-3 rounded-2xl border border-border bg-card p-4 shadow-soft">
+    <form ref={formRef} action={formAction} className="space-y-3 rounded-2xl border border-border bg-card p-4">
       <h3 className="text-sm font-semibold">Mark Sick Leave (Admin)</h3>
       <div className="space-y-2">
         <label htmlFor="sick-leave-employee" className="text-xs text-muted-foreground">Employee</label>

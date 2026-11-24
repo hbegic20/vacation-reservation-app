@@ -33,9 +33,9 @@ export class VacationsService {
     for (
       let date = new Date(start);
       date <= end;
-      date.setDate(date.getDate() + 1)
+      date.setUTCDate(date.getUTCDate() + 1)
     ) {
-      const day = date.getDay();
+      const day = date.getUTCDay();
       if (day !== 0 && day !== 6) {
         days += 1;
       }

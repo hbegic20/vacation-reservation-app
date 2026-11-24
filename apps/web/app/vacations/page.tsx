@@ -6,6 +6,7 @@ import { StatusBadge } from '@/components/ui/badge';
 import { fetchVacations } from '@/lib/api';
 import { requireToken, requireUser } from '@/lib/auth';
 import { formatDateRange } from '@/lib/dates';
+import { absenceTypeLabels } from '@/lib/labels';
 
 export default async function VacationsPage() {
   const user = await requireUser();
@@ -44,7 +45,7 @@ export default async function VacationsPage() {
                 <StatusBadge status={request.status} />
               </div>
               <p className="text-sm text-muted-foreground">
-                {request.absenceType} · {request.reason}
+                {absenceTypeLabels[request.absenceType]} · {request.reason}
               </p>
               {request.adminComment ? (
                 <p className="rounded-lg bg-muted px-3 py-2 text-sm">Admin: {request.adminComment}</p>

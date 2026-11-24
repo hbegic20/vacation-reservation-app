@@ -16,14 +16,22 @@ const config: Config = {
         muted: 'hsl(var(--muted))',
         'muted-foreground': 'hsl(var(--muted-foreground))',
         primary: 'hsl(var(--primary))',
-        accent: 'hsl(var(--accent))',
-        border: 'hsl(var(--border))'
+        'primary-soft': 'hsl(var(--primary-soft))',
+        'primary-text': 'hsl(var(--primary-text))',
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
+        success: { DEFAULT: 'hsl(var(--success))', soft: 'hsl(var(--success-soft))' },
+        warning: { DEFAULT: 'hsl(var(--warning))', soft: 'hsl(var(--warning-soft))' },
+        danger: { DEFAULT: 'hsl(var(--danger))', soft: 'hsl(var(--danger-soft))' },
+        sick: { DEFAULT: 'hsl(var(--sick))', soft: 'hsl(var(--sick-soft))' }
+      },
+      fontFamily: {
+        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-space-grotesk)', 'var(--font-inter)', 'sans-serif']
       },
       borderRadius: {
-        xl: '1rem'
-      },
-      boxShadow: {
-        soft: '0 12px 30px -12px rgb(15 23 42 / 0.2)'
+        xl: '0.75rem',
+        '2xl': '1.125rem'
       }
     }
   },
