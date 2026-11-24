@@ -5,6 +5,7 @@ export interface NavItem {
   href: string;
   label: string;
   icon: IconName;
+  waitingCount?: number;
 }
 
 const employeeNavItems: NavItem[] = [
@@ -21,6 +22,13 @@ const adminNavItems: NavItem[] = [
   { href: '/admin/admins', label: 'Admins', icon: 'shield' }
 ];
 
-export function navItemsFor(role: UserRole): NavItem[] {
-  return role === 'ADMIN' ? adminNavItems : employeeNavItems;
+const approvalsHref = '/admin/requests';
+
+export function navItemsFor(role: UserRole, pendingApprovals: number): NavItem[] {
+  if (role !== 'ADMIN') {
+    return employeeNavItems;
+  }
+  return adminNavItems.map((item) =>
+    item.href === approvalsHref ? { ...item, waitingCount: pendingApprovals } : item
+  );
 }

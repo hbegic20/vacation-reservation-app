@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { AuthUser } from '@vacation/shared';
 import { logoutAction } from '@/app/actions';
 import { Icon } from '@/components/ui/icon';
+import { fetchSummary } from '@/lib/api';
+import { requireToken } from '@/lib/auth';
 import { navItemsFor } from './nav-items';
 import { DesktopNavLinks, MobileTabBar } from './nav-links';
 import { ThemeToggle } from './theme-toggle';
@@ -10,8 +12,16 @@ function initials(user: AuthUser): string {
   return `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase();
 }
 
-export function TopNav({ user }: { user: AuthUser }) {
-  const items = navItemsFor(user.role);
+async function pendingApprovalCount(user: AuthUser): Promise<number> {
+  if (user.role !== 'ADMIN') {
+    return 0;
+  }
+  const summary = await fetchSummary(requireToken());
+  return 'pendingApprovals' in summary ? summary.pendingApprovals : 0;
+}
+
+export async function TopNav({ user }: { user: AuthUser }) {
+  const items = navItemsFor(user.role, await pendingApprovalCount(user));
 
   return (
     <>

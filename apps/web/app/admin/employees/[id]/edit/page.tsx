@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import { EditEmployeeForm } from '@/components/forms/edit-employee-form';
 import { ResetPasswordForm } from '@/components/forms/reset-password-form';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageShell } from '@/components/layout/page-shell';
 import { Avatar } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
-import { fetchEmployeeById } from '@/lib/api';
+import { ApiError, fetchEmployeeById } from '@/lib/api';
 import { requireAdmin, requireToken } from '@/lib/auth';
 import { formatDate } from '@/lib/dates';
 
@@ -17,10 +18,21 @@ interface EditEmployeePageProps {
   };
 }
 
+async function findEmployee(token: string, id: string) {
+  try {
+    return await fetchEmployeeById(token, id);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      notFound();
+    }
+    throw error;
+  }
+}
+
 export default async function EditEmployeePage({ params }: EditEmployeePageProps) {
   const user = await requireAdmin();
   const token = requireToken();
-  const employee = await fetchEmployeeById(token, params.id);
+  const employee = await findEmployee(token, params.id);
 
   return (
     <PageShell user={user} width="narrow">

@@ -6,6 +6,26 @@ import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/utils';
 import { NavItem } from './nav-items';
 
+function WaitingBadge({ count, className }: { count: number | undefined; className?: string }) {
+  if (!count) {
+    return null;
+  }
+  return (
+    <>
+      <span
+        aria-hidden="true"
+        className={cn(
+          'grid h-5 min-w-5 place-items-center rounded-full bg-warning px-1.5 text-[11px] font-bold text-white dark:text-background',
+          className
+        )}
+      >
+        {count}
+      </span>
+      <span className="sr-only">, {count} waiting</span>
+    </>
+  );
+}
+
 function mostSpecificMatch(items: NavItem[], pathname: string): string | null {
   const matches = items.filter(
     (item) => pathname === item.href || pathname.startsWith(`${item.href}/`)
@@ -27,13 +47,14 @@ export function DesktopNavLinks({ items }: { items: NavItem[] }) {
             href={item.href}
             aria-current={isActive ? 'page' : undefined}
             className={cn(
-              'inline-flex min-h-11 items-center rounded-xl px-3.5 text-sm transition-colors',
+              'inline-flex min-h-11 items-center gap-2 rounded-xl px-3.5 text-sm transition-colors',
               isActive
                 ? 'bg-primary-soft font-semibold text-primary-text'
                 : 'font-medium text-muted-foreground hover:bg-muted hover:text-foreground'
             )}
           >
             {item.label}
+            <WaitingBadge count={item.waitingCount} />
           </Link>
         );
       })}
@@ -59,12 +80,13 @@ export function MobileTabBar({ items }: { items: NavItem[] }) {
             href={item.href}
             aria-current={isActive ? 'page' : undefined}
             className={cn(
-              'flex min-h-16 flex-col items-center justify-center gap-0.5 text-xs',
+              'relative flex min-h-16 flex-col items-center justify-center gap-0.5 text-xs',
               isActive ? 'font-bold text-primary-text' : 'font-semibold text-muted-foreground'
             )}
           >
             <Icon name={item.icon} size={22} />
             {item.label}
+            <WaitingBadge count={item.waitingCount} className="absolute left-1/2 top-1.5 ml-2" />
           </Link>
         );
       })}
