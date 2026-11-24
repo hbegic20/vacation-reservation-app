@@ -85,3 +85,15 @@ const timestampFormatter = new Intl.DateTimeFormat('en-GB', {
 export function formatTimestamp(isoDateTime: string): string {
   return timestampFormatter.format(new Date(isoDateTime));
 }
+
+const weekdayDateFormatter = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC'
+});
+
+export function formatWeekdayDate(isoDate: string): string {
+  return weekdayDateFormatter.format(new Date(isoDate));
+}

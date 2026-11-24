@@ -6,18 +6,18 @@ import { useEffect, useMemo, useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { createVacationAction } from '@/app/actions';
 import { overlapsRange } from '@/lib/absences';
-import { countWorkingDays, formatDateRange, localDateKey, toDateKey } from '@/lib/dates';
+import { addDays } from '@/lib/calendar';
+import { countWorkingDays, formatDateRange, formatWeekdayDate, localDateKey, toDateKey } from '@/lib/dates';
+import { cn } from '@/lib/utils';
 import { plural } from '@/lib/people';
 import { Button, buttonStyles } from '../ui/button';
 import { FormMessage } from '../ui/form-message';
-import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
+import { BookedKind, DateRange, DateRangePicker } from './date-range-picker';
 import { useResetOnSuccess } from './use-reset-on-success';
 
 const initialState = { success: false, error: null as string | null };
-const emptyRange = { startDate: '', endDate: '' };
-
-type DateRange = typeof emptyRange;
+const emptyRange: DateRange = { startDate: '', endDate: '' };
 
 function SubmitButton({ blocked }: { blocked: boolean }) {
   const { pending } = useFormStatus();
@@ -77,6 +77,40 @@ interface VacationRequestFormProps {
   existingRequests: VacationRequest[];
 }
 
+function bookedKind(request: VacationRequest): BookedKind {
+  if (request.absenceType === 'SICK') {
+    return 'sick';
+  }
+  return request.status === 'PENDING' ? 'pending' : 'approved';
+}
+
+function bookedDaysOf(requests: VacationRequest[]): Map<string, BookedKind> {
+  const booked = new Map<string, BookedKind>();
+  for (const request of requests) {
+    const end = toDateKey(request.endDate);
+    for (let key = toDateKey(request.startDate); key <= end; key = addDays(key, 1)) {
+      booked.set(key, bookedKind(request));
+    }
+  }
+  return booked;
+}
+
+function SelectedDay({ label, dateKey }: { label: string; dateKey: string }) {
+  return (
+    <div
+      className={cn(
+        'flex min-w-0 flex-col justify-center rounded-xl border px-3.5 py-2',
+        dateKey ? 'border-primary/50 bg-primary-soft' : 'border-dashed border-input'
+      )}
+    >
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className={cn('truncate text-sm font-semibold', dateKey ? 'text-foreground' : 'text-muted-foreground')}>
+        {dateKey ? formatWeekdayDate(dateKey) : 'Not chosen'}
+      </span>
+    </div>
+  );
+}
+
 function isWeekday(dateKey: string): boolean {
   const weekday = new Date(`${dateKey}T00:00:00Z`).getUTCDay();
   return weekday !== 0 && weekday !== 6;
@@ -94,7 +128,12 @@ export function VacationRequestForm({ availableDays, holidays, existingRequests 
   }, [state]);
 
   const hasRange = range.startDate !== '' && range.endDate !== '' && range.endDate >= range.startDate;
-  const holidayKeys = useMemo(() => new Set(holidays.map((holiday) => toDateKey(holiday.date))), [holidays]);
+  const holidayNames = useMemo(
+    () => new Map(holidays.map((holiday) => [toDateKey(holiday.date), holiday.name])),
+    [holidays]
+  );
+  const holidayKeys = useMemo(() => new Set(holidayNames.keys()), [holidayNames]);
+  const bookedDays = useMemo(() => bookedDaysOf(existingRequests), [existingRequests]);
   const workingDays = hasRange ? countWorkingDays(range.startDate, range.endDate, holidayKeys) : 0;
   const holidaysInRange = hasRange
     ? holidays.filter((holiday) => {
@@ -113,47 +152,48 @@ export function VacationRequestForm({ availableDays, holidays, existingRequests 
         action={formAction}
         className="flex min-w-0 flex-[999_1_520px] flex-col gap-5 rounded-2xl border border-border bg-card p-6"
       >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="startDate" className="text-sm font-semibold">
-              First day off
-            </label>
-            <Input
-              id="startDate"
-              name="startDate"
-              type="date"
-              required
-              min={today}
-              onChange={(event) => setRange({ ...range, startDate: event.target.value })}
-            />
+        <fieldset className="flex min-w-0 flex-col gap-3" aria-describedby={error ? 'date-error' : undefined}>
+          <legend className="mb-3 text-sm font-semibold">Dates</legend>
+          <div className="grid grid-cols-[1fr_1fr_auto] items-stretch gap-2.5">
+            <SelectedDay label="First day off" dateKey={range.startDate} />
+            <SelectedDay label="Last day off" dateKey={range.endDate} />
+            <button
+              type="button"
+              onClick={() => setRange(emptyRange)}
+              disabled={range.startDate === ''}
+              className="min-h-11 rounded-xl px-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:invisible"
+            >
+              Clear
+            </button>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="endDate" className="text-sm font-semibold">
-              Last day off
-            </label>
-            <Input
-              id="endDate"
-              name="endDate"
-              type="date"
-              required
-              min={range.startDate || today}
-              aria-invalid={error ? true : undefined}
-              aria-describedby={error ? 'date-error' : undefined}
-              className={error ? 'border-2 border-danger' : undefined}
-              onChange={(event) => setRange({ ...range, endDate: event.target.value })}
-            />
-          </div>
-        </div>
-        {error ? (
-          <p id="date-error" role="alert" className="-mt-2 text-sm font-medium text-danger">
-            {error}
-          </p>
-        ) : null}
+          <DateRangePicker
+            range={range}
+            onChange={setRange}
+            minDate={today}
+            holidays={holidayNames}
+            bookedDays={bookedDays}
+            invalid={error !== null}
+          />
+          <input type="hidden" name="startDate" value={range.startDate} />
+          <input type="hidden" name="endDate" value={range.endDate} />
+          {error ? (
+            <p id="date-error" role="alert" className="text-sm font-medium text-danger">
+              {error}
+            </p>
+          ) : null}
+        </fieldset>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="reason" className="text-sm font-semibold">
             Reason
           </label>
-          <Textarea id="reason" name="reason" required rows={4} maxLength={500} />
+          <Textarea
+            id="reason"
+            name="reason"
+            required
+            rows={3}
+            maxLength={500}
+            placeholder="e.g. Family trip to the coast"
+          />
           <p className="text-[13px] text-muted-foreground">Only you and admins can see this.</p>
         </div>
         <FormMessage
@@ -167,7 +207,7 @@ export function VacationRequestForm({ availableDays, holidays, existingRequests 
           }
         />
         <div className="flex flex-wrap gap-2.5">
-          <SubmitButton blocked={error !== null} />
+          <SubmitButton blocked={error !== null || !hasRange} />
           <Link href="/dashboard" className={buttonStyles('secondary', 'min-h-12 px-5 text-[15px]')}>
             Cancel
           </Link>
