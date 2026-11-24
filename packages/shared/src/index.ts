@@ -7,6 +7,8 @@ export type NotificationType =
   | 'VACATION_APPROVED'
   | 'VACATION_REJECTED'
   | 'VACATION_CANCELLED'
+  | 'COVER_ASSIGNED'
+  | 'LEAVE_REMINDER'
   | 'SICK_LEAVE_ADDED'
   | 'DAILY_DIGEST';
 
@@ -38,6 +40,8 @@ export interface VacationRequest {
   absenceType: AbsenceType;
   status: VacationStatus;
   adminComment: string | null;
+  coverUserId: string | null;
+  coverUser?: PersonSummary | null;
   createdAt: string;
   updatedAt: string;
   user?: {
@@ -53,6 +57,7 @@ export interface CreateVacationRequestPayload {
   startDate: string;
   endDate: string;
   reason: string;
+  coverUserId?: string;
 }
 
 export interface UpdateVacationStatusPayload {
@@ -142,6 +147,7 @@ export interface VacationCalendarRequestItem {
   workingDays: number;
   absenceType: AbsenceType;
   status: VacationStatus;
+  coverUser: PersonSummary | null;
   user: {
     id: string;
     email: string;
@@ -193,4 +199,20 @@ export interface TeamAbsence {
 export interface ChangePasswordPayload {
   currentPassword: string;
   newPassword: string;
+}
+
+export interface PersonSummary {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
+export interface BridgeSuggestion {
+  leaveStart: string;
+  leaveEnd: string;
+  offStart: string;
+  offEnd: string;
+  leaveDays: number;
+  daysOff: number;
+  holidays: string[];
 }

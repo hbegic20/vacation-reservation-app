@@ -87,6 +87,21 @@ describe("Vacation endpoints", () => {
       expect(response.body.message).toBe("Not enough remaining vacation days");
     });
 
+    it("returns 400 when the cover is not a colleague", async () => {
+      testApp.prisma.user.findUnique.mockResolvedValue(buildUser());
+      testApp.prisma.user.findFirst.mockResolvedValue(null);
+
+      const response = await http()
+        .post("/api/vacations")
+        .set(asEmployee())
+        .send({ ...body, coverUserId: "admin-1" })
+        .expect(400);
+
+      expect(response.body.message).toBe(
+        "Choose an active colleague from your department as cover",
+      );
+    });
+
     it("returns 409 when the dates overlap existing time off", async () => {
       testApp.prisma.user.findUnique.mockResolvedValue(buildUser());
       testApp.prisma.vacationRequest.findFirst.mockResolvedValue(
@@ -168,6 +183,51 @@ describe("Vacation endpoints", () => {
 
     it("returns 401 without a token", async () => {
       await http().get("/api/vacations/approved").expect(401);
+    });
+  });
+
+  describe("GET /api/vacations/suggestions", () => {
+    it("returns bridge-day suggestions for employees", async () => {
+      testApp.prisma.user.findUnique.mockResolvedValue({
+        vacationDaysTotal: 25,
+        vacationDaysUsed: 0,
+      });
+      testApp.prisma.vacationRequest.findMany.mockResolvedValue([]);
+
+      const response = await http()
+        .get("/api/vacations/suggestions")
+        .set(asEmployee())
+        .expect(200);
+
+      expect(Array.isArray(response.body)).toBe(true);
+    });
+
+    it("returns 403 for admins", async () => {
+      await http().get("/api/vacations/suggestions").set(asAdmin()).expect(403);
+    });
+  });
+
+  describe("GET /api/vacations/team/members", () => {
+    it("lists colleagues who can cover", async () => {
+      testApp.prisma.user.findUnique.mockResolvedValue({
+        department: "Engineering",
+      });
+      testApp.prisma.user.findMany.mockResolvedValue([
+        { id: "employee-2", firstName: "Amina", lastName: "Kovač" },
+      ]);
+
+      const response = await http()
+        .get("/api/vacations/team/members")
+        .set(asEmployee())
+        .expect(200);
+
+      expect(response.body).toEqual([
+        { id: "employee-2", firstName: "Amina", lastName: "Kovač" },
+      ]);
+    });
+
+    it("returns 401 without a token", async () => {
+      await http().get("/api/vacations/team/members").expect(401);
     });
   });
 

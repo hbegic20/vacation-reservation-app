@@ -4,7 +4,7 @@ import { PublicHoliday, VacationCalendarDay } from '@vacation/shared';
 import { ReactNode, useMemo, useRef, useState } from 'react';
 import { MonthRef, monthCells, monthQuery } from '@/lib/calendar';
 import { toDateKey } from '@/lib/dates';
-import { DayRequests } from './calendar-day';
+import { DayRequests, entriesFromRequests } from './calendar-day';
 import { DayDetails } from './day-details';
 import { MonthView } from './month-view';
 import { YearView } from './year-view';
@@ -35,6 +35,10 @@ function initialSelection(keys: string[], byDate: ReadonlyMap<string, DayRequest
 
 export function CompanyCalendar({ view, month, today, days, holidays, department, sidePanelFooter }: CompanyCalendarProps) {
   const byDate = useMemo(() => new Map(days.map((entry) => [entry.date, entry.requests])), [days]);
+  const entries = useMemo(
+    () => new Map(days.map((entry) => [entry.date, entriesFromRequests(entry.requests)])),
+    [days]
+  );
   const holidayNames = useMemo(
     () => new Map(holidays.map((holiday) => [toDateKey(holiday.date), holiday.name])),
     [holidays]
@@ -65,7 +69,7 @@ export function CompanyCalendar({ view, month, today, days, holidays, department
       {view === 'month' ? (
         <MonthView
           month={month}
-          byDate={byDate}
+          entries={entries}
           holidayNames={holidayNames}
           selectedDate={selectedDate}
           today={today}

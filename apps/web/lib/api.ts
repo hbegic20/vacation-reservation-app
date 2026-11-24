@@ -1,4 +1,6 @@
 import {
+  BridgeSuggestion,
+  PersonSummary,
   ChangePasswordPayload,
   CreateHolidayPayload,
   PublicHoliday,
@@ -328,4 +330,22 @@ export async function changePassword(token: string, payload: ChangePasswordPaylo
   });
 
   return parseJson<{ success: boolean }>(response);
+}
+
+export async function fetchBridgeSuggestions(token: string) {
+  const response = await fetch(`${API_URL}/vacations/suggestions`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store'
+  });
+
+  return parseJson<BridgeSuggestion[]>(response);
+}
+
+export async function fetchTeamMembers(token: string) {
+  const response = await fetch(`${API_URL}/vacations/team/members`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store'
+  });
+
+  return parseJson<PersonSummary[]>(response);
 }

@@ -35,6 +35,8 @@ export function buildRequest(
     endDate: new Date("2026-03-13T00:00:00.000Z"),
     reason: "Family trip",
     workingDays: 5,
+    coverUserId: null,
+    reminderSentAt: null,
     absenceType: AbsenceType.VACATION,
     status: VacationStatus.PENDING,
     adminComment: null,

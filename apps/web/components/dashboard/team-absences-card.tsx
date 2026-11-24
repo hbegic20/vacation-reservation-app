@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { TeamAbsence } from '@vacation/shared';
 import { Avatar } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
@@ -47,6 +48,11 @@ export function TeamAbsencesCard({ department, absences }: TeamAbsencesCardProps
           ))}
         </ul>
       )}
+      {department ? (
+        <Link href="/team" className="mt-auto text-sm font-semibold text-primary-text">
+          Open team calendar
+        </Link>
+      ) : null}
     </Card>
   );
 }

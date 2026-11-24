@@ -78,10 +78,12 @@ export async function createVacationAction(_: unknown, formData: FormData) {
   const token = requireToken();
 
   try {
+    const coverUserId = String(formData.get('coverUserId') || '');
     await createVacationRequest(token, {
       startDate: String(formData.get('startDate')),
       endDate: String(formData.get('endDate')),
-      reason: String(formData.get('reason'))
+      reason: String(formData.get('reason')),
+      coverUserId: coverUserId || undefined
     });
 
     revalidatePath('/vacations');

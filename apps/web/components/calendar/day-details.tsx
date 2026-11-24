@@ -43,6 +43,14 @@ export function DayDetails({ selectedDate, requests, holidayName }: DayDetailsPr
                 {plural(request.workingDays, 'working day')}
               </p>
               <p className="text-muted-foreground">“{request.reason}”</p>
+              {request.coverUser ? (
+                <p>
+                  Covered by{' '}
+                  <span className="font-semibold">
+                    {request.coverUser.firstName} {request.coverUser.lastName}
+                  </span>
+                </p>
+              ) : null}
             </li>
           ))}
         </ul>

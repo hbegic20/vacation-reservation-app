@@ -182,6 +182,48 @@ describe("VacationsService", () => {
       );
     });
 
+    it("stores a colleague from the same department as cover", async () => {
+      prisma.user.findUnique.mockResolvedValue(buildUser());
+      prisma.user.findFirst.mockResolvedValue({ id: "employee-2" });
+      prisma.vacationRequest.create.mockResolvedValue({
+        ...buildRequest({ coverUserId: "employee-2" }),
+        user: publicUser(buildUser()),
+      });
+
+      await vacationsService.createRequest(employeeUser, {
+        ...monToFri,
+        coverUserId: "employee-2",
+      });
+
+      expect(prisma.user.findFirst.mock.calls[0][0].where).toEqual({
+        id: "employee-2",
+        role: UserRole.EMPLOYEE,
+        isActive: true,
+        department: "Engineering",
+        NOT: { id: "employee-1" },
+      });
+      expect(
+        prisma.vacationRequest.create.mock.calls[0][0].data.coverUserId,
+      ).toBe("employee-2");
+    });
+
+    it("rejects a cover who is not an active colleague in the department", async () => {
+      prisma.user.findUnique.mockResolvedValue(buildUser());
+      prisma.user.findFirst.mockResolvedValue(null);
+
+      await expect(
+        vacationsService.createRequest(employeeUser, {
+          ...monToFri,
+          coverUserId: "someone-else",
+        }),
+      ).rejects.toThrow(
+        new BadRequestException(
+          "Choose an active colleague from your department as cover",
+        ),
+      );
+      expect(prisma.vacationRequest.create).not.toHaveBeenCalled();
+    });
+
     it("rejects a request larger than the remaining allowance", async () => {
       prisma.user.findUnique.mockResolvedValue(
         buildUser({ vacationDaysTotal: 25, vacationDaysUsed: 22 }),
@@ -340,6 +382,30 @@ describe("VacationsService", () => {
         title: "Vacation approved",
         message:
           'Your time off 9 Mar 2026 – 13 Mar 2026 was approved. Admin comment: "Enjoy"',
+        metadata: { requestId: "request-1" },
+      });
+    });
+
+    it("notifies the cover colleague when the vacation is approved", async () => {
+      prisma.vacationRequest.findUnique.mockResolvedValue({
+        ...buildRequest({ coverUserId: "employee-2" }),
+        user: buildUser(),
+      });
+      prisma.vacationRequest.update.mockResolvedValue({
+        ...buildRequest({
+          status: VacationStatus.APPROVED,
+          coverUserId: "employee-2",
+        }),
+        user: publicUser(buildUser()),
+      });
+
+      await vacationsService.approve("request-1");
+
+      expect(notifications.notifyEmployee).toHaveBeenCalledWith("employee-2", {
+        type: "COVER_ASSIGNED",
+        title: "You're covering for John Employee",
+        message:
+          "John Employee is away 9 Mar 2026 – 13 Mar 2026 and named you as cover. Check in with them about open work before they leave.",
         metadata: { requestId: "request-1" },
       });
     });
@@ -554,6 +620,72 @@ describe("VacationsService", () => {
       await expect(
         vacationsService.cancel(employeeUser, "someone-elses"),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe("listTeamMembers", () => {
+    it("lists active colleagues in the same department, without the user", async () => {
+      prisma.user.findUnique.mockResolvedValue({ department: "Engineering" });
+      prisma.user.findMany.mockResolvedValue([{ id: "employee-2" }]);
+
+      await expect(
+        vacationsService.listTeamMembers(employeeUser),
+      ).resolves.toEqual([{ id: "employee-2" }]);
+      expect(prisma.user.findMany.mock.calls[0][0].where).toEqual({
+        role: UserRole.EMPLOYEE,
+        isActive: true,
+        department: "Engineering",
+        NOT: { id: "employee-1" },
+      });
+    });
+
+    it("returns nobody for someone without a department", async () => {
+      prisma.user.findUnique.mockResolvedValue({ department: null });
+
+      await expect(
+        vacationsService.listTeamMembers(employeeUser),
+      ).resolves.toEqual([]);
+    });
+  });
+
+  describe("suggestBridgeDays", () => {
+    it("suggests bridges from holidays, skipping booked days and starting tomorrow", async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        vacationDaysTotal: 25,
+        vacationDaysUsed: 8,
+      });
+      prisma.publicHoliday.findMany.mockResolvedValue([
+        { date: utcDate("2026-03-10"), name: "Test Day" },
+        { date: utcDate("2026-03-26"), name: "Later Day" },
+      ]);
+      prisma.vacationRequest.findMany.mockResolvedValue([
+        { startDate: utcDate("2026-03-09"), endDate: utcDate("2026-03-09") },
+      ]);
+
+      const suggestions = await vacationsService.suggestBridgeDays(
+        employeeUser,
+        new Date("2026-03-02T10:00:00.000Z"),
+      );
+
+      expect(suggestions).toEqual([
+        expect.objectContaining({
+          leaveStart: "2026-03-11",
+          leaveEnd: "2026-03-13",
+          holidays: ["Test Day"],
+        }),
+        expect.objectContaining({
+          leaveStart: "2026-03-27",
+          leaveEnd: "2026-03-27",
+          daysOff: 4,
+          holidays: ["Later Day"],
+        }),
+      ]);
+      expect(
+        prisma.vacationRequest.findMany.mock.calls[0][0].where,
+      ).toMatchObject({
+        userId: "employee-1",
+        status: { in: [VacationStatus.PENDING, VacationStatus.APPROVED] },
+      });
     });
   });
 

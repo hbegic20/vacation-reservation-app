@@ -28,7 +28,8 @@ apps/api/
   src/
     auth/              login, JWT strategy and guard
     users/             employee and admin management (/api/admin/*)
-    vacations/         requests, approvals, cancellation, sick leave, calendar, summary, team absences
+    vacations/         requests, approvals, cancellation, sick leave, calendar, summary, team absences,
+                       bridge-day suggestions (bridge-days.ts), leave reminders (RemindersService)
     holidays/          public holidays and holiday-aware working-day counts
     notifications/     in-app notifications for any user, MailerService (SMTP/Resend), Slack, daily digest
     common/            @Roles decorator, RolesGuard, @CurrentUser
@@ -81,6 +82,9 @@ The developer often has `npm run dev` running already. Check ports 3000 and 4000
 - Never expose another employee's absence type or reason to employees (the team endpoint returns names and dates only).
 - Notifications belong to one user (`Notification.userId`). Notify admins with `NotificationsService.createAndDispatch` and an employee with `notifyEmployee`; both store the in-app notification first, then send email through `MailerService`, which never throws when mail fails.
 - The API reads `apps/api/.env` only at startup. After changing it, ask the developer to restart `npm run dev`.
+- A request's cover (`coverUserId`) must be an active employee in the requester's department and not the requester. The cover is notified on approval, not on submission.
+- `RemindersService` runs hourly and claims a reminder by setting `reminderSentAt` before notifying, so restarts never send twice. Endpoint tests stub its `onModuleInit` like the digest's.
+- Bridge-day suggestions are a pure function in `bridge-days.ts`; change its rules there and cover them in `bridge-days.spec.ts`.
 - When you add or change an endpoint, update `packages/shared` types and the README endpoint list.
 
 ## Frontend conventions

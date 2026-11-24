@@ -29,6 +29,8 @@ enum NotificationType {
   VACATION_APPROVED
   VACATION_REJECTED
   VACATION_CANCELLED
+  COVER_ASSIGNED
+  LEAVE_REMINDER
   SICK_LEAVE_ADDED
   DAILY_DIGEST
 }
@@ -46,27 +48,32 @@ model User {
   vacationDaysTotal  Int               @default(25)
   vacationDaysUsed   Int               @default(0)
   requests           VacationRequest[]
+  coveringRequests   VacationRequest[] @relation("Coverage")
   notifications      Notification[]
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 }
 
 model VacationRequest {
-  id           String         @id @default(cuid())
-  userId       String
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  startDate    DateTime
-  endDate      DateTime
-  reason       String
-  workingDays  Int            @default(0)
-  absenceType  AbsenceType    @default(VACATION)
-  status       VacationStatus @default(PENDING)
-  adminComment String?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id             String         @id @default(cuid())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  coverUserId    String?
+  coverUser      User?          @relation("Coverage", fields: [coverUserId], references: [id], onDelete: SetNull)
+  reminderSentAt DateTime?
+  startDate      DateTime
+  endDate        DateTime
+  reason         String
+  workingDays    Int            @default(0)
+  absenceType    AbsenceType    @default(VACATION)
+  status         VacationStatus @default(PENDING)
+  adminComment   String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   @@index([userId])
   @@index([status])
+  @@index([coverUserId])
 }
 
 model Notification {

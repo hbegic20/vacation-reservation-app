@@ -1,6 +1,13 @@
 import Link from 'next/link';
-import { AuthUser, EmployeeSummaryResponse, NotificationItem, TeamAbsence } from '@vacation/shared';
+import {
+  AuthUser,
+  BridgeSuggestion,
+  EmployeeSummaryResponse,
+  NotificationItem,
+  TeamAbsence
+} from '@vacation/shared';
 import { NotificationsPanel } from '@/components/notifications/notifications-panel';
+import { BridgeSuggestions } from '@/components/requests/bridge-suggestions';
 import { buttonStyles } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { AllowanceCard } from './allowance-card';
@@ -13,6 +20,7 @@ interface EmployeeDashboardProps {
   summary: EmployeeSummaryResponse;
   teamAbsences: TeamAbsence[];
   unreadNotifications: NotificationItem[];
+  suggestions: BridgeSuggestion[];
 }
 
 function pendingWorkingDays(summary: EmployeeSummaryResponse): number {
@@ -25,7 +33,8 @@ export function EmployeeDashboard({
   user,
   summary,
   teamAbsences,
-  unreadNotifications
+  unreadNotifications,
+  suggestions
 }: EmployeeDashboardProps) {
   return (
     <div className="flex flex-col gap-7">
@@ -64,6 +73,8 @@ export function EmployeeDashboard({
         <NextTimeOffCard vacation={summary.upcomingVacations[0]} />
         <TeamAbsencesCard department={user.department} absences={teamAbsences} />
       </div>
+
+      <BridgeSuggestions suggestions={suggestions} />
 
       <section aria-labelledby="recent-requests-title" className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5">

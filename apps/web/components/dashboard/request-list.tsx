@@ -22,6 +22,11 @@ export function RequestList({ requests }: { requests: VacationRequest[] }) {
               {absenceTypeLabels[request.absenceType]} · {request.reason} ·{' '}
               {plural(request.workingDays, 'working day')}
             </p>
+            {request.coverUser ? (
+              <p className="mt-1 text-sm text-muted-foreground">
+                Cover: {request.coverUser.firstName} {request.coverUser.lastName}
+              </p>
+            ) : null}
             {request.adminComment ? (
               <p className="mt-1.5 text-sm">Admin: “{request.adminComment}”</p>
             ) : null}

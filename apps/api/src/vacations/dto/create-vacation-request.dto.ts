@@ -1,5 +1,11 @@
 import { Type } from "class-transformer";
-import { IsDate, IsNotEmpty, IsString, MaxLength } from "class-validator";
+import {
+  IsDate,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from "class-validator";
 import { IsOnOrAfter } from "../../common/validators/is-on-or-after";
 
 export class CreateVacationRequestDto {
@@ -16,4 +22,9 @@ export class CreateVacationRequestDto {
   @IsNotEmpty()
   @MaxLength(500)
   reason!: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  coverUserId?: string;
 }

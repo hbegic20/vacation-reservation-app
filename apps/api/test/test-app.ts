@@ -6,6 +6,7 @@ import { AppModule } from "../src/app.module";
 import { configureApp } from "../src/app.setup";
 import { NotificationsService } from "../src/notifications/notifications.service";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { RemindersService } from "../src/vacations/reminders.service";
 import { PrismaMock, createPrismaMock } from "./prisma-mock";
 
 export interface TestApp {
@@ -30,6 +31,9 @@ export const adminIdentity = {
 export async function createTestApp(): Promise<TestApp> {
   jest
     .spyOn(NotificationsService.prototype, "onModuleInit")
+    .mockImplementation(() => undefined);
+  jest
+    .spyOn(RemindersService.prototype, "onModuleInit")
     .mockImplementation(() => undefined);
 
   const prisma = createPrismaMock();

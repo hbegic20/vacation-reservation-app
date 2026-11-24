@@ -5,6 +5,7 @@ import { PageShell } from '@/components/layout/page-shell';
 import {
   fetchNotifications,
   fetchUnreadNotificationCount,
+  fetchBridgeSuggestions,
   fetchEmployees,
   fetchSummary,
   fetchTeamAbsences,
@@ -51,10 +52,11 @@ async function AdminDashboardSection({ token }: { token: string }) {
 
 async function EmployeeDashboardSection({ user, token }: { user: AuthUser; token: string }) {
   const week = workWeekKeys();
-  const [summary, teamAbsences, unreadNotifications] = await Promise.all([
+  const [summary, teamAbsences, unreadNotifications, suggestions] = await Promise.all([
     fetchSummary(token) as Promise<EmployeeSummaryResponse>,
     fetchTeamAbsences(token, week[0], week[week.length - 1]),
-    fetchNotifications(token, true)
+    fetchNotifications(token, true),
+    fetchBridgeSuggestions(token)
   ]);
 
   return (
@@ -63,6 +65,7 @@ async function EmployeeDashboardSection({ user, token }: { user: AuthUser; token
       summary={summary}
       teamAbsences={teamAbsences}
       unreadNotifications={unreadNotifications}
+      suggestions={suggestions}
     />
   );
 }

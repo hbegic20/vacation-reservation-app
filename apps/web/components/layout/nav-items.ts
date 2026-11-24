@@ -11,7 +11,8 @@ export interface NavItem {
 const employeeNavItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: 'home' },
   { href: '/vacations', label: 'My requests', icon: 'list' },
-  { href: '/vacations/request', label: 'New request', icon: 'plusCircle' }
+  { href: '/vacations/request', label: 'New request', icon: 'plusCircle' },
+  { href: '/team', label: 'Team', icon: 'users' }
 ];
 
 const adminNavItems: NavItem[] = [

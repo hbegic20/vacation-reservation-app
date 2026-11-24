@@ -17,6 +17,8 @@ export const notificationTypeLabels: Record<NotificationType, string> = {
   VACATION_APPROVED: 'Approved',
   VACATION_REJECTED: 'Rejected',
   VACATION_CANCELLED: 'Cancelled',
+  COVER_ASSIGNED: 'Cover',
+  LEAVE_REMINDER: 'Reminder',
   SICK_LEAVE_ADDED: 'Sick leave',
   DAILY_DIGEST: 'Daily digest'
 };

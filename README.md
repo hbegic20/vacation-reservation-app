@@ -29,7 +29,10 @@ Production-oriented monorepo for company leave management with a split architect
 - Employees can cancel pending requests and approved time off that hasn't started (days are returned)
 - Employees get an in-app notification and an email when a request is approved, rejected or recorded as sick leave
 - Public holidays managed by admins; they don't count as working days
-- "Out on your team this week" for employees (same department, names and dates only)
+- "Out on your team this week" and a `/team` month calendar for employees (same department, names and dates only)
+- Bridge-day suggestions: "Take 1 day, get 4 days off" around public holidays, one click pre-fills the request form
+- Optional cover colleague on requests; they're notified when the request is approved
+- Reminder the day before approved vacation starts (in-app and email, from 07:00 UTC)
 - Temporary passwords: users must choose their own password on first sign-in or after a reset
 
 ## Key Frontend Routes
@@ -47,6 +50,7 @@ Production-oriented monorepo for company leave management with a split architect
 - `/admin/holidays`
 - `/account/password`
 - `/notifications`
+- `/team`
 - Light/dark theme + subtle UI animations
 
 ## Project Structure
@@ -87,6 +91,8 @@ All routes are prefixed with `/api` by Nest.
 - `GET /api/vacations/summary`
 - `GET /api/vacations/team?from=2026-03-09&to=2026-03-15` (same-department colleagues, names and dates only)
 - `PATCH /api/vacations/:id/cancel` (employee, own requests)
+- `GET /api/vacations/suggestions` (employee: bridge-day suggestions around public holidays)
+- `GET /api/vacations/team/members` (employee: same-department colleagues who can cover)
 - `PATCH /api/vacations/:id/approve`
 - `PATCH /api/vacations/:id/reject`
 - `GET /api/vacations/calendar?year=2026`

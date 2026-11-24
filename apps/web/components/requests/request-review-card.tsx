@@ -62,6 +62,11 @@ function RequestSummary({ request }: { request: VacationRequest }) {
           · {absenceTypeLabels[request.absenceType]}
         </p>
         <p className="text-sm text-muted-foreground">“{request.reason}”</p>
+        {request.coverUser ? (
+          <p className="text-sm">
+            Cover: <span className="font-semibold">{request.coverUser.firstName} {request.coverUser.lastName}</span>
+          </p>
+        ) : null}
         {!isPending && request.adminComment ? (
           <p className="mt-1 text-sm">Admin: “{request.adminComment}”</p>
         ) : null}

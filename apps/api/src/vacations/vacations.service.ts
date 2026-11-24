@@ -12,7 +12,13 @@ import {
   VacationStatus,
 } from "@prisma/client";
 import { RequestUser } from "../auth/types";
-import { formatDateRange, startOfUtcDay, toDateKey } from "../common/dates";
+import {
+  addDays,
+  formatDateRange,
+  startOfUtcDay,
+  toDateKey,
+} from "../common/dates";
+import { suggestBridgeDays } from "./bridge-days";
 import { HolidaysService } from "../holidays/holidays.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -20,6 +26,25 @@ import { CreateSickLeaveDto } from "./dto/create-sick-leave.dto";
 import { CreateVacationRequestDto } from "./dto/create-vacation-request.dto";
 
 const maxTeamRangeInDays = 62;
+const suggestionLimit = 3;
+const suggestionHorizonInDays = 365;
+
+const personSummary = {
+  select: { id: true, firstName: true, lastName: true },
+} as const;
+
+const requestPeople = {
+  user: {
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      department: true,
+    },
+  },
+  coverUser: personSummary,
+} as const;
 
 @Injectable()
 export class VacationsService {
@@ -82,6 +107,123 @@ export class VacationsService {
     );
   }
 
+  private async resolveCover(
+    requester: { id: string; department: string | null },
+    coverUserId: string,
+  ): Promise<string> {
+    const cover = requester.department
+      ? await this.prisma.user.findFirst({
+          where: {
+            id: coverUserId,
+            role: UserRole.EMPLOYEE,
+            isActive: true,
+            department: requester.department,
+            NOT: { id: requester.id },
+          },
+          select: { id: true },
+        })
+      : null;
+    if (!cover) {
+      throw new BadRequestException(
+        "Choose an active colleague from your department as cover",
+      );
+    }
+    return cover.id;
+  }
+
+  private async notifyCover(request: {
+    id: string;
+    startDate: Date;
+    endDate: Date;
+    coverUserId: string | null;
+    user: { firstName: string; lastName: string };
+  }) {
+    if (!request.coverUserId) {
+      return;
+    }
+    const name = `${request.user.firstName} ${request.user.lastName}`;
+    await this.notificationsService.notifyEmployee(request.coverUserId, {
+      type: NotificationType.COVER_ASSIGNED,
+      title: `You're covering for ${name}`,
+      message: `${name} is away ${formatDateRange(request.startDate, request.endDate)} and named you as cover. Check in with them about open work before they leave.`,
+      metadata: { requestId: request.id },
+    });
+  }
+
+  async listTeamMembers(user: RequestUser) {
+    const member = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { department: true },
+    });
+    if (!member?.department) {
+      return [];
+    }
+
+    return this.prisma.user.findMany({
+      where: {
+        role: UserRole.EMPLOYEE,
+        isActive: true,
+        department: member.department,
+        NOT: { id: user.id },
+      },
+      select: { id: true, firstName: true, lastName: true },
+      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+    });
+  }
+
+  async suggestBridgeDays(user: RequestUser, today: Date = new Date()) {
+    const firstDay = addDays(toDateKey(today), 1);
+    const lastDay = addDays(firstDay, suggestionHorizonInDays);
+    const [employee, holidays, booked] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: user.id },
+        select: { vacationDaysTotal: true, vacationDaysUsed: true },
+      }),
+      this.prisma.publicHoliday.findMany({
+        where: {
+          date: {
+            gte: new Date(`${addDays(firstDay, -14)}T00:00:00.000Z`),
+            lte: new Date(`${addDays(lastDay, 14)}T00:00:00.000Z`),
+          },
+        },
+        select: { date: true, name: true },
+      }),
+      this.prisma.vacationRequest.findMany({
+        where: {
+          userId: user.id,
+          status: { in: [VacationStatus.PENDING, VacationStatus.APPROVED] },
+          endDate: { gte: new Date(`${firstDay}T00:00:00.000Z`) },
+        },
+        select: { startDate: true, endDate: true },
+      }),
+    ]);
+    if (!employee) {
+      throw new NotFoundException("Employee not found");
+    }
+
+    const blockedDays = new Set<string>();
+    for (const request of booked) {
+      for (
+        let key = toDateKey(request.startDate);
+        key <= toDateKey(request.endDate);
+        key = addDays(key, 1)
+      ) {
+        blockedDays.add(key);
+      }
+    }
+
+    return suggestBridgeDays({
+      firstDay,
+      lastDay,
+      holidays: new Map(
+        holidays.map((holiday) => [toDateKey(holiday.date), holiday.name]),
+      ),
+      blockedDays,
+      availableDays: employee.vacationDaysTotal - employee.vacationDaysUsed,
+      limit: suggestionLimit,
+    });
+  }
+
   async createRequest(user: RequestUser, dto: CreateVacationRequestDto) {
     const requestedDays = await this.holidaysService.countWorkingDays(
       dto.startDate,
@@ -113,6 +255,10 @@ export class VacationsService {
       statuses: [VacationStatus.PENDING, VacationStatus.APPROVED],
     });
 
+    const coverUserId = dto.coverUserId
+      ? await this.resolveCover(employee, dto.coverUserId)
+      : null;
+
     const request = await this.prisma.vacationRequest.create({
       data: {
         userId: user.id,
@@ -120,20 +266,11 @@ export class VacationsService {
         endDate: dto.endDate,
         reason: dto.reason,
         workingDays: requestedDays,
+        coverUserId,
         absenceType: AbsenceType.VACATION,
         status: VacationStatus.PENDING,
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            department: true,
-          },
-        },
-      },
+      include: requestPeople,
     });
 
     await this.notificationsService.createAndDispatch({
@@ -190,17 +327,7 @@ export class VacationsService {
         status: VacationStatus.APPROVED,
         adminComment: dto.adminComment ?? "Marked as sick leave by admin",
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            department: true,
-          },
-        },
-      },
+      include: requestPeople,
     });
 
     await this.notificationsService.createAndDispatch({
@@ -228,34 +355,14 @@ export class VacationsService {
   listForEmployee(userId: string) {
     return this.prisma.vacationRequest.findMany({
       where: { userId },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            department: true,
-          },
-        },
-      },
+      include: requestPeople,
       orderBy: { createdAt: "desc" },
     });
   }
 
   listAll() {
     return this.prisma.vacationRequest.findMany({
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            department: true,
-          },
-        },
-      },
+      include: requestPeople,
       orderBy: { createdAt: "desc" },
     });
   }
@@ -263,17 +370,7 @@ export class VacationsService {
   listApproved() {
     return this.prisma.vacationRequest.findMany({
       where: { status: VacationStatus.APPROVED },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            department: true,
-          },
-        },
-      },
+      include: requestPeople,
       orderBy: { startDate: "asc" },
     });
   }
@@ -352,17 +449,7 @@ export class VacationsService {
           status: VacationStatus.APPROVED,
           adminComment: adminComment ?? null,
         },
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-              department: true,
-            },
-          },
-        },
+        include: requestPeople,
       });
     });
 
@@ -375,6 +462,8 @@ export class VacationsService {
         userId: approvedVacation.userId,
       },
     });
+
+    await this.notifyCover(approvedVacation);
 
     await this.notifyEmployeeOfOutcome(
       approvedVacation,
@@ -406,17 +495,7 @@ export class VacationsService {
         status: VacationStatus.REJECTED,
         adminComment: adminComment ?? null,
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            department: true,
-          },
-        },
-      },
+      include: requestPeople,
     });
 
     const requestUser = await this.prisma.user.findUnique({
@@ -478,34 +557,14 @@ export class VacationsService {
         status: VacationStatus.APPROVED,
         startDate: { gte: new Date() },
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            department: true,
-          },
-        },
-      },
+      include: requestPeople,
       orderBy: { startDate: "asc" },
       take: 5,
     });
 
     const requestHistory = await this.prisma.vacationRequest.findMany({
       where: { userId: user.id },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            department: true,
-          },
-        },
-      },
+      include: requestPeople,
       orderBy: { createdAt: "desc" },
       take: 10,
     });
@@ -635,6 +694,7 @@ export class VacationsService {
         workingDays: true,
         absenceType: true,
         status: true,
+        coverUser: personSummary,
         user: {
           select: {
             id: true,
@@ -661,6 +721,7 @@ export class VacationsService {
           workingDays: number;
           absenceType: AbsenceType;
           status: VacationStatus;
+          coverUser: { id: string; firstName: string; lastName: string } | null;
           user: {
             id: string;
             email: string;
@@ -709,6 +770,7 @@ export class VacationsService {
           workingDays: request.workingDays,
           absenceType: request.absenceType,
           status: request.status,
+          coverUser: request.coverUser,
           user: request.user,
         });
         daysMap.set(key, dayEntry);

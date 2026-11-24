@@ -55,6 +55,18 @@ export class VacationsController {
     return this.vacationsService.listApproved();
   }
 
+  @Get("suggestions")
+  @Roles(UserRole.EMPLOYEE)
+  suggestions(@CurrentUser() user: RequestUser) {
+    return this.vacationsService.suggestBridgeDays(user);
+  }
+
+  @Get("team/members")
+  @Roles(UserRole.EMPLOYEE)
+  teamMembers(@CurrentUser() user: RequestUser) {
+    return this.vacationsService.listTeamMembers(user);
+  }
+
   @Get("team")
   team(@CurrentUser() user: RequestUser, @Query() query: TeamAbsencesQueryDto) {
     return this.vacationsService.listTeamAbsences(user, query.from, query.to);

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { PublicHoliday, VacationRequest } from '@vacation/shared';
+import { PersonSummary, PublicHoliday, VacationRequest } from '@vacation/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { createVacationAction } from '@/app/actions';
@@ -11,7 +11,9 @@ import { countWorkingDays, formatDateRange, formatWeekdayDate, localDateKey, toD
 import { cn } from '@/lib/utils';
 import { plural } from '@/lib/people';
 import { Button, buttonStyles } from '../ui/button';
+import { Field } from '../ui/field';
 import { FormMessage } from '../ui/form-message';
+import { Select } from '../ui/select';
 import { Textarea } from '../ui/textarea';
 import { BookedKind, DateRange, DateRangePicker } from './date-range-picker';
 import { useResetOnSuccess } from './use-reset-on-success';
@@ -75,6 +77,8 @@ interface VacationRequestFormProps {
   availableDays: number;
   holidays: PublicHoliday[];
   existingRequests: VacationRequest[];
+  teamMembers: PersonSummary[];
+  initialRange?: DateRange;
 }
 
 function bookedKind(request: VacationRequest): BookedKind {
@@ -116,10 +120,16 @@ function isWeekday(dateKey: string): boolean {
   return weekday !== 0 && weekday !== 6;
 }
 
-export function VacationRequestForm({ availableDays, holidays, existingRequests }: VacationRequestFormProps) {
+export function VacationRequestForm({
+  availableDays,
+  holidays,
+  existingRequests,
+  teamMembers,
+  initialRange
+}: VacationRequestFormProps) {
   const [state, formAction] = useFormState(createVacationAction, initialState);
   const formRef = useResetOnSuccess(state);
-  const [range, setRange] = useState<DateRange>(emptyRange);
+  const [range, setRange] = useState<DateRange>(initialRange ?? emptyRange);
 
   useEffect(() => {
     if (state.success) {
@@ -196,6 +206,22 @@ export function VacationRequestForm({ availableDays, holidays, existingRequests 
           />
           <p className="text-[13px] text-muted-foreground">Only you and admins can see this.</p>
         </div>
+        {teamMembers.length > 0 ? (
+          <Field
+            id="coverUserId"
+            label="Who covers for you? (optional)"
+            hint="They get a notification once your request is approved."
+          >
+            <Select id="coverUserId" name="coverUserId" defaultValue="" className="w-full">
+              <option value="">No cover needed</option>
+              {teamMembers.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.firstName} {member.lastName}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : null}
         <FormMessage
           state={state}
           successTitle="Request sent"
