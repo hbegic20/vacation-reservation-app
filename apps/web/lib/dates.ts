@@ -42,12 +42,17 @@ function utcMidnight(isoDate: string): Date {
   return new Date(`${toDateKey(isoDate)}T00:00:00Z`);
 }
 
-export function countWorkingDays(startDate: string, endDate: string): number {
+export function countWorkingDays(
+  startDate: string,
+  endDate: string,
+  holidayKeys: ReadonlySet<string> = new Set()
+): number {
   const end = utcMidnight(endDate);
   let workingDays = 0;
   for (let day = utcMidnight(startDate); day <= end; day.setUTCDate(day.getUTCDate() + 1)) {
     const weekday = day.getUTCDay();
-    if (weekday !== 0 && weekday !== 6) {
+    const isWeekend = weekday === 0 || weekday === 6;
+    if (!isWeekend && !holidayKeys.has(day.toISOString().slice(0, 10))) {
       workingDays += 1;
     }
   }

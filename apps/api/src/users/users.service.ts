@@ -45,6 +45,7 @@ export class UsersService {
         vacationDaysTotal: dto.vacationDaysTotal,
         vacationDaysUsed: 0,
         isActive: true,
+        mustChangePassword: true,
       },
       select: {
         id: true,
@@ -81,6 +82,7 @@ export class UsersService {
         vacationDaysTotal: 30,
         vacationDaysUsed: 0,
         isActive: true,
+        mustChangePassword: true,
       },
       select: {
         id: true,
@@ -119,6 +121,7 @@ export class UsersService {
         lastName: true,
         department: true,
         isActive: true,
+        mustChangePassword: true,
         vacationDaysTotal: true,
         vacationDaysUsed: true,
       },
@@ -208,7 +211,7 @@ export class UsersService {
 
     return this.prisma.user.update({
       where: { id },
-      data: { password },
+      data: { password, mustChangePassword: true },
       select: {
         id: true,
         email: true,

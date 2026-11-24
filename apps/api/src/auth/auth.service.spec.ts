@@ -1,6 +1,6 @@
-import { UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
-import { hash } from "bcrypt";
+import { compare, hash } from "bcrypt";
 import { buildUser } from "../../test/fixtures";
 import { asPrismaService, createPrismaMock } from "../../test/prisma-mock";
 import { UsersService } from "../users/users.service";
@@ -16,6 +16,7 @@ describe("AuthService", () => {
     authService = new AuthService(
       new UsersService(asPrismaService(prisma)),
       jwtService,
+      asPrismaService(prisma),
     );
   });
 
@@ -42,6 +43,7 @@ describe("AuthService", () => {
       lastName: user.lastName,
       department: user.department,
       isActive: true,
+      mustChangePassword: false,
       vacationDaysTotal: 25,
       vacationDaysUsed: 8,
     });
@@ -83,5 +85,80 @@ describe("AuthService", () => {
         password: "employee1234",
       }),
     ).rejects.toThrow(new UnauthorizedException("Account is inactive"));
+  });
+
+  it("tells the client when the user must change a temporary password", async () => {
+    prisma.user.findUnique.mockResolvedValue(
+      buildUser({
+        mustChangePassword: true,
+        password: await hash("temporary-pass", 4),
+      }),
+    );
+
+    const result = await authService.login({
+      email: "john.employee@company.com",
+      password: "temporary-pass",
+    });
+
+    expect(result.user.mustChangePassword).toBe(true);
+  });
+
+  describe("changePassword", () => {
+    beforeEach(async () => {
+      prisma.user.findUnique.mockResolvedValue(
+        buildUser({
+          mustChangePassword: true,
+          password: await hash("temporary-pass", 4),
+        }),
+      );
+    });
+
+    it("stores the new hashed password and clears the must-change flag", async () => {
+      await expect(
+        authService.changePassword("employee-1", {
+          currentPassword: "temporary-pass",
+          newPassword: "my-own-password",
+        }),
+      ).resolves.toEqual({ success: true });
+
+      const { where, data } = prisma.user.update.mock.calls[0][0];
+      expect(where).toEqual({ id: "employee-1" });
+      expect(data.mustChangePassword).toBe(false);
+      await expect(compare("my-own-password", data.password)).resolves.toBe(
+        true,
+      );
+    });
+
+    it("rejects a wrong current password", async () => {
+      await expect(
+        authService.changePassword("employee-1", {
+          currentPassword: "guess-1234",
+          newPassword: "my-own-password",
+        }),
+      ).rejects.toThrow(
+        new BadRequestException("Current password is incorrect"),
+      );
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects reusing the current password", async () => {
+      await expect(
+        authService.changePassword("employee-1", {
+          currentPassword: "temporary-pass",
+          newPassword: "temporary-pass",
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("rejects an account that no longer exists", async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        authService.changePassword("missing", {
+          currentPassword: "temporary-pass",
+          newPassword: "my-own-password",
+        }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
   });
 });

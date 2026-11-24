@@ -9,7 +9,7 @@ This file applies to this repo only. Ignore the SpeedCoach `CLAUDE.md` in the pa
 - **Never commit, push, create branches, or open PRs.** Do not run `git add`, `git commit`, `git push`, `git rebase`, `git reset`, `git stash`, or `gh pr`. The developer reviews and commits everything. Leave changes in the working tree. Suggesting a commit message is fine when asked.
 - Never hardcode secrets. Read them from env vars and keep both `.env.example` files up to date (names and safe defaults only).
 - Do not add a dependency without a clear need, and say why in your reply when you do.
-- Database changes only through Prisma migrations (`prisma/schema.prisma` + `prisma migrate dev`).
+- Database changes only through Prisma migrations (`prisma/schema.prisma` + `prisma migrate dev`). Migrations are committed; when a change needs existing rows updated, add the backfill SQL to the generated migration (`migrate dev --create-only`, edit, then apply).
 - Keep changes focused on the task. Do not reformat or refactor unrelated code.
 
 ## Stack
@@ -28,7 +28,8 @@ apps/api/
   src/
     auth/              login, JWT strategy and guard
     users/             employee and admin management (/api/admin/*)
-    vacations/         requests, approvals, sick leave, calendar, summary
+    vacations/         requests, approvals, cancellation, sick leave, calendar, summary, team absences
+    holidays/          public holidays and holiday-aware working-day counts
     notifications/     in-app admin notifications, Slack/email, daily digest
     common/            @Roles decorator, RolesGuard, @CurrentUser
     prisma/            PrismaService
@@ -73,16 +74,21 @@ The developer often has `npm run dev` running already. Check ports 3000 and 4000
 - Validate every request body with a class-validator DTO. The global `ValidationPipe` runs with `whitelist` and `forbidNonWhitelisted`.
 - Protect routes with `JwtAuthGuard`, plus `@Roles('ADMIN')` and `RolesGuard` for admin endpoints. Check ownership in the service, not only the role.
 - Throw Nest HTTP exceptions (`BadRequestException`, `NotFoundException`, …) with messages that are safe to show users.
-- Dates are calendar days stored as UTC midnight. Build and compare date keys with UTC getters (`getUTCFullYear` etc.).
+- Dates are calendar days stored as UTC midnight. Build and compare date keys with UTC getters (`getUTCFullYear` etc.) or the helpers in `src/common/dates.ts`.
+- Working days (weekdays minus public holidays) are counted once, with `HolidaysService.countWorkingDays`, and stored in `VacationRequest.workingDays` when a request is created. Approval deducts and cancellation refunds that stored number; never recount for those.
+- A request is an active absence only when it is `PENDING` or `APPROVED`. `REJECTED` and `CANCELLED` never count toward calendars, overlaps or balances.
+- Accounts created or reset by an admin get `mustChangePassword: true`; `POST /auth/change-password` clears it.
+- Never expose another employee's absence type or reason to employees (the team endpoint returns names and dates only).
 - When you add or change an endpoint, update `packages/shared` types and the README endpoint list.
 
 ## Frontend conventions
 
 - Server Components by default. Add `'use client'` only to the smallest leaf that needs state, effects or browser APIs (forms, modals, the year calendar).
 - Fetch data on the server through `lib/api.ts`. No client-side data fetching libraries.
-- Get the session through `lib/auth.ts`: `requireUser()` or `requireAdmin()` for the user, `requireToken()` for the token. Never use `token!`.
+- Get the session through `lib/auth.ts`: `requireUser()` or `requireAdmin()` for the user, `requireToken()` for the token. Never use `token!`. `requireUser()` sends users with `mustChangePassword` to `/account/password`; only that page uses `requireSignedIn()`.
+- Show `request.workingDays` from the API; only the request form counts days itself (`countWorkingDays` with the holiday list) for its live preview. Use `isActiveAbsence()` and `canCancel()` from `lib/absences.ts` instead of comparing statuses inline.
 - `lib/api.ts` throws `ApiError` for failed responses and redirects to `/login` on 401, except in `loginRequest`, which needs to return the 401 as "Invalid credentials".
-- Server actions in `app/actions.ts` take `(prevState, formData)` and return `{ success, error }`. Inside `catch`, use `failureState(error, message)`: it turns only `ApiError` into a form message and rethrows everything else, so `redirect()` keeps working. Call `revalidatePath` for every page the change affects.
+- Server actions in `app/actions.ts` take `(prevState, formData)` and return `{ success, error }`. Inside `catch`, use `failureState(error, message)`, or `failureWithApiMessage(error, fallback)` when the API's own 4xx message is safe and useful to show. Both turn only `ApiError` into a form message and rethrow everything else, so `redirect()` keeps working. Call `revalidatePath` for every page the change affects.
 - Client forms use `useFormState` + `useFormStatus`. Use `useResetOnSuccess(state)` for create forms. Every input needs a label linked with `htmlFor`/`id`.
 - Format dates only with `lib/dates.ts` (`formatDate`, `formatDateRange`, `formatLongDate`; UTC-based). Compare calendar days with `toDateKey()` and `localDateKey()`, never by comparing `Date` objects. Don't use `toLocaleDateString()`.
 - To make a link look like a button, use `<Link className={buttonStyles('secondary')}>`. Never put `<Button>` inside `<Link>`.

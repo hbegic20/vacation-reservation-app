@@ -180,18 +180,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async sendEmail(payload: NotificationPayload) {
-    const provider = this.config.get<string>("EMAIL_PROVIDER", "");
-
-    if (provider === "resend") {
-      await this.sendEmailResend(payload);
-    }
-  }
-
-  private async sendEmailResend(payload: NotificationPayload) {
-    const apiKey = this.config.get<string>("RESEND_API_KEY");
-    const from = this.config.get<string>("EMAIL_FROM");
-
-    if (!apiKey || !from) {
+    if (!this.resendSettings()) {
       return;
     }
 
@@ -203,22 +192,53 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       select: { email: true },
     });
 
-    if (admins.length === 0) {
+    await this.sendResendEmail(
+      admins.map((admin) => admin.email),
+      payload.title,
+      payload.message,
+    );
+  }
+
+  async notifyEmployee(userId: string, subject: string, text: string) {
+    if (!this.resendSettings()) {
+      return;
+    }
+
+    const employee = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, isActive: true },
+    });
+    if (!employee?.isActive) {
+      return;
+    }
+
+    await this.sendResendEmail([employee.email], subject, text);
+  }
+
+  private resendSettings(): { apiKey: string; from: string } | null {
+    const provider = this.config.get<string>("EMAIL_PROVIDER", "");
+    const apiKey = this.config.get<string>("RESEND_API_KEY");
+    const from = this.config.get<string>("EMAIL_FROM");
+
+    if (provider !== "resend" || !apiKey || !from) {
+      return null;
+    }
+    return { apiKey, from };
+  }
+
+  private async sendResendEmail(to: string[], subject: string, text: string) {
+    const settings = this.resendSettings();
+    if (!settings || to.length === 0) {
       return;
     }
 
     await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${settings.apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        from,
-        to: admins.map((admin) => admin.email),
-        subject: payload.title,
-        text: payload.message,
-      }),
+      body: JSON.stringify({ from: settings.from, to, subject, text }),
     }).catch(() => undefined);
   }
 }

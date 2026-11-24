@@ -1,9 +1,9 @@
-import { VacationRequest } from '@vacation/shared';
+import { VacationRequest, VacationStatus } from '@vacation/shared';
 import { ModerateRequestForm } from '@/components/forms/moderate-request-form';
 import { Avatar } from '@/components/ui/avatar';
 import { StatusBadge } from '@/components/ui/badge';
 import { daysSince } from '@/lib/absences';
-import { countWorkingDays, formatDate, formatDateRange } from '@/lib/dates';
+import { formatDate, formatDateRange } from '@/lib/dates';
 import { absenceTypeLabels } from '@/lib/labels';
 import { plural, requesterName } from '@/lib/people';
 
@@ -23,9 +23,17 @@ function sentLabel(request: VacationRequest): string {
   return days === 1 ? 'Sent yesterday' : `Sent ${days} days ago`;
 }
 
-function decisionLabel(request: VacationRequest): string {
-  const verb = request.status === 'APPROVED' ? 'Approved' : 'Rejected';
-  return `${verb} ${formatDate(request.updatedAt)}`;
+const decisionVerbs: Record<Exclude<VacationStatus, 'PENDING'>, string> = {
+  APPROVED: 'Approved',
+  REJECTED: 'Rejected',
+  CANCELLED: 'Cancelled by employee'
+};
+
+function statusDetail(request: VacationRequest): string {
+  if (request.status === 'PENDING') {
+    return sentLabel(request);
+  }
+  return `${decisionVerbs[request.status]} ${formatDate(request.updatedAt)}`;
 }
 
 function RequestSummary({ request }: { request: VacationRequest }) {
@@ -49,7 +57,7 @@ function RequestSummary({ request }: { request: VacationRequest }) {
         <p className="text-sm">
           {formatDateRange(request.startDate, request.endDate)} ·{' '}
           <strong className="font-semibold">
-            {plural(countWorkingDays(request.startDate, request.endDate), 'working day')}
+            {plural(request.workingDays, 'working day')}
           </strong>{' '}
           · {absenceTypeLabels[request.absenceType]}
         </p>
@@ -61,7 +69,7 @@ function RequestSummary({ request }: { request: VacationRequest }) {
       <div className="flex flex-col items-end gap-1.5">
         <StatusBadge status={request.status} />
         <span className="text-[13px] text-muted-foreground">
-          {isPending ? sentLabel(request) : decisionLabel(request)}
+          {statusDetail(request)}
         </span>
       </div>
     </>
@@ -69,7 +77,7 @@ function RequestSummary({ request }: { request: VacationRequest }) {
 }
 
 function ReviewPanel({ request, remainingDays, overlappingTeammates }: RequestReviewCardProps) {
-  const workingDays = countWorkingDays(request.startDate, request.endDate);
+  const workingDays = request.workingDays;
 
   return (
     <div className="flex flex-col gap-3 border-t border-border bg-muted/50 px-6 py-5">

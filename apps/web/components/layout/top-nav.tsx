@@ -3,7 +3,7 @@ import { AuthUser } from '@vacation/shared';
 import { logoutAction } from '@/app/actions';
 import { Icon } from '@/components/ui/icon';
 import { fetchSummary } from '@/lib/api';
-import { requireToken } from '@/lib/auth';
+import { changePasswordPath, requireToken } from '@/lib/auth';
 import { navItemsFor } from './nav-items';
 import { DesktopNavLinks, MobileTabBar } from './nav-links';
 import { ThemeToggle } from './theme-toggle';
@@ -38,8 +38,12 @@ export async function TopNav({ user }: { user: AuthUser }) {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <div className="hidden items-center gap-2.5 rounded-xl border border-border py-1 pl-3 pr-1 sm:flex">
-              <span className="text-sm font-semibold">
+            <Link
+              href={changePasswordPath}
+              aria-label={`Account settings for ${user.firstName} ${user.lastName}`}
+              className="flex min-h-11 items-center gap-2.5 rounded-xl border border-border p-1 transition-colors hover:bg-muted sm:pl-3"
+            >
+              <span className="hidden text-sm font-semibold text-foreground sm:inline">
                 {user.firstName} {user.lastName}
               </span>
               <span
@@ -48,7 +52,7 @@ export async function TopNav({ user }: { user: AuthUser }) {
               >
                 {initials(user)}
               </span>
-            </div>
+            </Link>
             <form action={logoutAction}>
               <button
                 type="submit"

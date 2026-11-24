@@ -1,11 +1,12 @@
 export type UserRole = 'ADMIN' | 'EMPLOYEE';
 
-export type VacationStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type VacationStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 export type AbsenceType = 'VACATION' | 'SICK';
 export type NotificationType =
   | 'VACATION_REQUEST_SUBMITTED'
   | 'VACATION_APPROVED'
   | 'VACATION_REJECTED'
+  | 'VACATION_CANCELLED'
   | 'SICK_LEAVE_ADDED'
   | 'DAILY_DIGEST';
 
@@ -17,6 +18,7 @@ export interface AuthUser {
   lastName: string;
   department: string | null;
   isActive: boolean;
+  mustChangePassword: boolean;
   vacationDaysTotal: number;
   vacationDaysUsed: number;
 }
@@ -32,6 +34,7 @@ export interface VacationRequest {
   startDate: string;
   endDate: string;
   reason: string;
+  workingDays: number;
   absenceType: AbsenceType;
   status: VacationStatus;
   adminComment: string | null;
@@ -136,6 +139,7 @@ export interface VacationCalendarRequestItem {
   startDate: string;
   endDate: string;
   reason: string;
+  workingDays: number;
   absenceType: AbsenceType;
   status: VacationStatus;
   user: {
@@ -161,4 +165,32 @@ export interface AdminNotificationItem {
   isRead: boolean;
   metadata?: Record<string, unknown> | null;
   createdAt: string;
+}
+
+export interface PublicHoliday {
+  id: string;
+  date: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface CreateHolidayPayload {
+  date: string;
+  name: string;
+}
+
+export interface TeamAbsence {
+  id: string;
+  startDate: string;
+  endDate: string;
+  person: {
+    id: string;
+    firstName: string;
+    lastName: string;
+  };
+}
+
+export interface ChangePasswordPayload {
+  currentPassword: string;
+  newPassword: string;
 }

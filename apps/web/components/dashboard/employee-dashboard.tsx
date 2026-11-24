@@ -1,24 +1,25 @@
 import Link from 'next/link';
-import { AuthUser, EmployeeSummaryResponse } from '@vacation/shared';
+import { AuthUser, EmployeeSummaryResponse, TeamAbsence } from '@vacation/shared';
 import { buttonStyles } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
-import { countWorkingDays } from '@/lib/dates';
 import { AllowanceCard } from './allowance-card';
 import { NextTimeOffCard } from './next-time-off-card';
 import { RequestList } from './request-list';
+import { TeamAbsencesCard } from './team-absences-card';
 
 interface EmployeeDashboardProps {
   user: AuthUser;
   summary: EmployeeSummaryResponse;
+  teamAbsences: TeamAbsence[];
 }
 
 function pendingWorkingDays(summary: EmployeeSummaryResponse): number {
   return summary.requestHistory
     .filter((request) => request.status === 'PENDING')
-    .reduce((total, request) => total + countWorkingDays(request.startDate, request.endDate), 0);
+    .reduce((total, request) => total + request.workingDays, 0);
 }
 
-export function EmployeeDashboard({ user, summary }: EmployeeDashboardProps) {
+export function EmployeeDashboard({ user, summary, teamAbsences }: EmployeeDashboardProps) {
   return (
     <div className="flex flex-col gap-7">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -36,7 +37,7 @@ export function EmployeeDashboard({ user, summary }: EmployeeDashboardProps) {
         </Link>
       </div>
 
-      <div className="grid gap-5 md:grid-cols-2">
+      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
         <AllowanceCard
           totalDays={user.vacationDaysTotal}
           usedDays={user.vacationDaysUsed}
@@ -44,6 +45,7 @@ export function EmployeeDashboard({ user, summary }: EmployeeDashboardProps) {
           pendingDays={pendingWorkingDays(summary)}
         />
         <NextTimeOffCard vacation={summary.upcomingVacations[0]} />
+        <TeamAbsencesCard department={user.department} absences={teamAbsences} />
       </div>
 
       <section aria-labelledby="recent-requests-title" className="overflow-hidden rounded-2xl border border-border bg-card">

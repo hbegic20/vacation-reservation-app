@@ -41,6 +41,7 @@ describe("UsersService", () => {
         email: dto.email,
         role: UserRole.EMPLOYEE,
         isActive: true,
+        mustChangePassword: true,
         vacationDaysUsed: 0,
         vacationDaysTotal: 25,
       });
@@ -78,6 +79,7 @@ describe("UsersService", () => {
     expect(prisma.user.create.mock.calls[0][0].data).toMatchObject({
       role: UserRole.ADMIN,
       department: null,
+      mustChangePassword: true,
     });
   });
 
@@ -137,8 +139,10 @@ describe("UsersService", () => {
       newPassword: "brand-new-pass",
     });
 
-    const { password } = prisma.user.update.mock.calls[0][0].data;
+    const { password, mustChangePassword } =
+      prisma.user.update.mock.calls[0][0].data;
     await expect(compare("brand-new-pass", password)).resolves.toBe(true);
+    expect(mustChangePassword).toBe(true);
   });
 
   it("lists employees with their request counts, defaulting to zero", async () => {

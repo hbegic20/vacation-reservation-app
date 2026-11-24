@@ -8,6 +8,7 @@ function modelMock() {
     create: jest.fn(),
     createMany: jest.fn(),
     update: jest.fn(),
+    delete: jest.fn(),
     updateMany: jest.fn(),
     count: jest.fn(),
     groupBy: jest.fn(),
@@ -18,6 +19,7 @@ interface PrismaShape {
   user: ModelMock;
   vacationRequest: ModelMock;
   adminNotification: ModelMock;
+  publicHoliday: ModelMock;
   $transaction: jest.Mock;
 }
 
@@ -28,6 +30,7 @@ export function createPrismaMock() {
     user: modelMock(),
     vacationRequest: modelMock(),
     adminNotification: modelMock(),
+    publicHoliday: modelMock(),
     $transaction: jest.fn(),
   };
   return resetPrismaMock(prisma);
@@ -40,9 +43,11 @@ export function resetPrismaMock<T extends PrismaShape>(prisma: T): T {
     prisma.user,
     prisma.vacationRequest,
     prisma.adminNotification,
+    prisma.publicHoliday,
   ]) {
     Object.values(model).forEach((method) => method.mockReset());
   }
+  prisma.publicHoliday.findMany.mockResolvedValue([]);
   prisma.$transaction
     .mockReset()
     .mockImplementation((work: (transaction: T) => unknown) => work(prisma));

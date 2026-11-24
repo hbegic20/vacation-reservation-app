@@ -10,6 +10,7 @@ import {
   asPrismaService,
   createPrismaMock,
 } from "../../test/prisma-mock";
+import { HolidaysService } from "../holidays/holidays.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { VacationsService } from "./vacations.service";
 
@@ -30,17 +31,22 @@ function utcDate(isoDate: string): Date {
 
 describe("VacationsService", () => {
   let prisma: PrismaMock;
-  let notifications: { createAndDispatch: jest.Mock };
+  let notifications: {
+    createAndDispatch: jest.Mock;
+    notifyEmployee: jest.Mock;
+  };
   let vacationsService: VacationsService;
 
   beforeEach(() => {
     prisma = createPrismaMock();
     notifications = {
       createAndDispatch: jest.fn().mockResolvedValue(undefined),
+      notifyEmployee: jest.fn().mockResolvedValue(undefined),
     };
     vacationsService = new VacationsService(
       asPrismaService(prisma),
       notifications as unknown as NotificationsService,
+      new HolidaysService(asPrismaService(prisma)),
     );
   });
 
@@ -64,6 +70,7 @@ describe("VacationsService", () => {
       expect(prisma.vacationRequest.create.mock.calls[0][0].data).toMatchObject(
         {
           userId: "employee-1",
+          workingDays: 5,
           absenceType: AbsenceType.VACATION,
           status: VacationStatus.PENDING,
         },
@@ -110,6 +117,25 @@ describe("VacationsService", () => {
       await expect(
         vacationsService.createRequest(employeeUser, monToFri),
       ).rejects.toThrow("Not enough remaining vacation days");
+    });
+
+    it("does not count public holidays against the allowance", async () => {
+      prisma.publicHoliday.findMany.mockResolvedValue([
+        { date: utcDate("2026-03-11") },
+      ]);
+      prisma.user.findUnique.mockResolvedValue(
+        buildUser({ vacationDaysTotal: 4, vacationDaysUsed: 0 }),
+      );
+      prisma.vacationRequest.create.mockResolvedValue({
+        ...buildRequest({ workingDays: 4 }),
+        user: publicUser(buildUser()),
+      });
+
+      await vacationsService.createRequest(employeeUser, monToFri);
+
+      expect(
+        prisma.vacationRequest.create.mock.calls[0][0].data.workingDays,
+      ).toBe(4);
     });
 
     it("rejects a request larger than the remaining allowance", async () => {
@@ -161,6 +187,11 @@ describe("VacationsService", () => {
       expect(notifications.createAndDispatch).toHaveBeenCalledWith(
         expect.objectContaining({ type: "SICK_LEAVE_ADDED" }),
       );
+      expect(notifications.notifyEmployee).toHaveBeenCalledWith(
+        "employee-1",
+        "Sick leave recorded",
+        expect.stringContaining("was recorded as sick leave"),
+      );
     });
 
     it("rejects an end date before the start date", async () => {
@@ -183,10 +214,10 @@ describe("VacationsService", () => {
   });
 
   describe("approve", () => {
-    it("approves a vacation and deducts its business days in one transaction", async () => {
+    it("approves a vacation and deducts its stored working days in one transaction", async () => {
       const user = buildUser({ vacationDaysTotal: 25, vacationDaysUsed: 8 });
       prisma.vacationRequest.findUnique.mockResolvedValue({
-        ...buildRequest(),
+        ...buildRequest({ workingDays: 5 }),
         user,
       });
       prisma.vacationRequest.update.mockResolvedValue(
@@ -206,6 +237,44 @@ describe("VacationsService", () => {
       });
       expect(notifications.createAndDispatch).toHaveBeenCalledWith(
         expect.objectContaining({ type: "VACATION_APPROVED" }),
+      );
+    });
+
+    it("deducts the days stored at request time even if holidays changed since", async () => {
+      prisma.publicHoliday.findMany.mockResolvedValue([
+        { date: utcDate("2026-03-10") },
+      ]);
+      prisma.vacationRequest.findUnique.mockResolvedValue({
+        ...buildRequest({ workingDays: 5 }),
+        user: buildUser(),
+      });
+      prisma.vacationRequest.update.mockResolvedValue(buildRequest());
+
+      await vacationsService.approve("request-1");
+
+      expect(prisma.user.update.mock.calls[0][0].data).toEqual({
+        vacationDaysUsed: { increment: 5 },
+      });
+    });
+
+    it("emails the employee about the decision with the admin comment", async () => {
+      prisma.vacationRequest.findUnique.mockResolvedValue({
+        ...buildRequest(),
+        user: buildUser(),
+      });
+      prisma.vacationRequest.update.mockResolvedValue(
+        buildRequest({
+          status: VacationStatus.APPROVED,
+          adminComment: "Enjoy",
+        }),
+      );
+
+      await vacationsService.approve("request-1", "Enjoy");
+
+      expect(notifications.notifyEmployee).toHaveBeenCalledWith(
+        "employee-1",
+        "Vacation approved",
+        "Your time off from 2026-03-09 to 2026-03-13 was approved.\n\nComment: Enjoy",
       );
     });
 
@@ -280,6 +349,11 @@ describe("VacationsService", () => {
       expect(notifications.createAndDispatch).toHaveBeenCalledWith(
         expect.objectContaining({ type: "VACATION_REJECTED" }),
       );
+      expect(notifications.notifyEmployee).toHaveBeenCalledWith(
+        "employee-1",
+        "Vacation request rejected",
+        expect.stringContaining("was rejected"),
+      );
     });
 
     it("refuses requests that are no longer pending", async () => {
@@ -299,6 +373,153 @@ describe("VacationsService", () => {
       await expect(vacationsService.reject("missing")).rejects.toBeInstanceOf(
         NotFoundException,
       );
+    });
+  });
+
+  describe("cancel", () => {
+    beforeEach(() => {
+      jest.useFakeTimers({ now: new Date("2026-03-01T10:00:00.000Z") });
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    function givenOwnRequest(overrides: Parameters<typeof buildRequest>[0]) {
+      prisma.vacationRequest.findFirst.mockResolvedValue({
+        ...buildRequest(overrides),
+        user: { firstName: "John", lastName: "Employee" },
+      });
+      prisma.vacationRequest.update.mockResolvedValue(
+        buildRequest({ ...overrides, status: VacationStatus.CANCELLED }),
+      );
+    }
+
+    it("cancels a pending request without touching the allowance", async () => {
+      givenOwnRequest({ status: VacationStatus.PENDING });
+
+      await vacationsService.cancel(employeeUser, "request-1");
+
+      expect(prisma.vacationRequest.findFirst.mock.calls[0][0].where).toEqual({
+        id: "request-1",
+        userId: "employee-1",
+      });
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.vacationRequest.update.mock.calls[0][0].data).toEqual({
+        status: VacationStatus.CANCELLED,
+      });
+      expect(notifications.createAndDispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "VACATION_CANCELLED" }),
+      );
+    });
+
+    it("refunds the stored days when approved future vacation is cancelled", async () => {
+      givenOwnRequest({ status: VacationStatus.APPROVED, workingDays: 4 });
+
+      await vacationsService.cancel(employeeUser, "request-1");
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: "employee-1" },
+        data: { vacationDaysUsed: { decrement: 4 } },
+      });
+    });
+
+    it("does not refund cancelled sick leave", async () => {
+      givenOwnRequest({
+        status: VacationStatus.APPROVED,
+        absenceType: AbsenceType.SICK,
+      });
+
+      await vacationsService.cancel(employeeUser, "request-1");
+
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it("refuses approved time off that has already started", async () => {
+      jest.setSystemTime(new Date("2026-03-09T08:00:00.000Z"));
+      givenOwnRequest({ status: VacationStatus.APPROVED });
+
+      await expect(
+        vacationsService.cancel(employeeUser, "request-1"),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.vacationRequest.update).not.toHaveBeenCalled();
+    });
+
+    it.each([VacationStatus.REJECTED, VacationStatus.CANCELLED])(
+      "refuses a %s request",
+      async (status) => {
+        givenOwnRequest({ status });
+
+        await expect(
+          vacationsService.cancel(employeeUser, "request-1"),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      },
+    );
+
+    it("hides requests that belong to someone else", async () => {
+      prisma.vacationRequest.findFirst.mockResolvedValue(null);
+
+      await expect(
+        vacationsService.cancel(employeeUser, "someone-elses"),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe("listTeamAbsences", () => {
+    const from = utcDate("2026-03-09");
+    const to = utcDate("2026-03-15");
+
+    it("returns approved absences of active colleagues in the same department", async () => {
+      prisma.user.findUnique.mockResolvedValue({ department: "Engineering" });
+      prisma.vacationRequest.findMany.mockResolvedValue([
+        {
+          id: "request-2",
+          startDate: utcDate("2026-03-10"),
+          endDate: utcDate("2026-03-11"),
+          user: { id: "employee-2", firstName: "Amina", lastName: "Kovač" },
+        },
+      ]);
+
+      await expect(
+        vacationsService.listTeamAbsences(employeeUser, from, to),
+      ).resolves.toEqual([
+        {
+          id: "request-2",
+          startDate: utcDate("2026-03-10"),
+          endDate: utcDate("2026-03-11"),
+          person: { id: "employee-2", firstName: "Amina", lastName: "Kovač" },
+        },
+      ]);
+      const query = prisma.vacationRequest.findMany.mock.calls[0][0];
+      expect(query.where).toEqual({
+        status: VacationStatus.APPROVED,
+        startDate: { lte: to },
+        endDate: { gte: from },
+        userId: { not: "employee-1" },
+        user: { department: "Engineering", isActive: true },
+      });
+      expect(query.select).not.toHaveProperty("reason");
+      expect(query.select).not.toHaveProperty("absenceType");
+    });
+
+    it("returns nothing for someone without a department", async () => {
+      prisma.user.findUnique.mockResolvedValue({ department: null });
+
+      await expect(
+        vacationsService.listTeamAbsences(employeeUser, from, to),
+      ).resolves.toEqual([]);
+      expect(prisma.vacationRequest.findMany).not.toHaveBeenCalled();
+    });
+
+    it("rejects ranges longer than 62 days", async () => {
+      await expect(
+        vacationsService.listTeamAbsences(
+          employeeUser,
+          utcDate("2026-01-01"),
+          utcDate("2026-03-05"),
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 
@@ -376,6 +597,11 @@ describe("VacationsService", () => {
 
       const days = await vacationsService.getCalendarByYear(2026);
 
+      expect(
+        prisma.vacationRequest.findMany.mock.calls[0][0].where.status,
+      ).toEqual({
+        not: VacationStatus.CANCELLED,
+      });
       expect(days.map((day) => day.date)).toEqual(["2026-01-01", "2026-01-02"]);
       expect(days[1].requests.map((request) => request.id)).toEqual([
         "new-year",

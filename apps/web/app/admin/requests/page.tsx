@@ -15,6 +15,7 @@ const statusFilters: { value: StatusFilter; label: string }[] = [
   { value: 'PENDING', label: 'Pending' },
   { value: 'APPROVED', label: 'Approved' },
   { value: 'REJECTED', label: 'Rejected' },
+  { value: 'CANCELLED', label: 'Cancelled' },
   { value: 'ALL', label: 'All' }
 ];
 
@@ -22,6 +23,7 @@ const emptyMessages: Record<StatusFilter, { title: string; text: string }> = {
   PENDING: { title: 'All caught up', text: 'No requests are waiting for approval.' },
   APPROVED: { title: 'Nothing approved yet', text: 'Approved requests will show up here.' },
   REJECTED: { title: 'No rejections', text: 'Rejected requests will show up here.' },
+  CANCELLED: { title: 'No cancellations', text: 'Requests employees cancel will show up here.' },
   ALL: { title: 'No requests yet', text: 'Requests appear here as soon as employees submit them.' }
 };
 

@@ -1,4 +1,8 @@
 import {
+  ChangePasswordPayload,
+  CreateHolidayPayload,
+  PublicHoliday,
+  TeamAbsence,
   AdminNotificationItem,
   AdminListItem,
   CreateAdminPayload,
@@ -24,6 +28,22 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = 'ApiError';
+  }
+
+  get userMessage(): string | null {
+    try {
+      const body: unknown = JSON.parse(this.message);
+      if (typeof body !== 'object' || body === null || !('message' in body)) {
+        return null;
+      }
+      const { message } = body;
+      if (typeof message === 'string') {
+        return message;
+      }
+      return Array.isArray(message) && typeof message[0] === 'string' ? message[0] : null;
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -243,6 +263,68 @@ export async function markAllNotificationsRead(token: string) {
   const response = await fetch(`${API_URL}/notifications/read-all`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${token}` }
+  });
+
+  return parseJson<{ success: boolean }>(response);
+}
+
+export async function cancelVacationRequest(token: string, requestId: string) {
+  const response = await fetch(`${API_URL}/vacations/${requestId}/cancel`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  return parseJson<VacationRequest>(response);
+}
+
+export async function fetchTeamAbsences(token: string, from: string, to: string) {
+  const response = await fetch(`${API_URL}/vacations/team?from=${from}&to=${to}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store'
+  });
+
+  return parseJson<TeamAbsence[]>(response);
+}
+
+export async function fetchHolidays(token: string, year: number) {
+  const response = await fetch(`${API_URL}/holidays?year=${year}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store'
+  });
+
+  return parseJson<PublicHoliday[]>(response);
+}
+
+export async function createHoliday(token: string, payload: CreateHolidayPayload) {
+  const response = await fetch(`${API_URL}/holidays`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+
+  return parseJson<PublicHoliday>(response);
+}
+
+export async function deleteHoliday(token: string, holidayId: string) {
+  const response = await fetch(`${API_URL}/holidays/${holidayId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  return parseJson<{ success: boolean }>(response);
+}
+
+export async function changePassword(token: string, payload: ChangePasswordPayload) {
+  const response = await fetch(`${API_URL}/auth/change-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
   });
 
   return parseJson<{ success: boolean }>(response);

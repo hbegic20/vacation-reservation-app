@@ -16,6 +16,7 @@ enum VacationStatus {
   PENDING
   APPROVED
   REJECTED
+  CANCELLED
 }
 
 enum AbsenceType {
@@ -27,25 +28,27 @@ enum NotificationType {
   VACATION_REQUEST_SUBMITTED
   VACATION_APPROVED
   VACATION_REJECTED
+  VACATION_CANCELLED
   SICK_LEAVE_ADDED
   DAILY_DIGEST
 }
 
 model User {
-  id                String            @id @default(cuid())
-  email             String            @unique
-  password          String
-  role              UserRole          @default(EMPLOYEE)
-  firstName         String
-  lastName          String
-  department        String?
-  isActive          Boolean           @default(true)
-  vacationDaysTotal Int               @default(25)
-  vacationDaysUsed  Int               @default(0)
-  requests          VacationRequest[]
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  password           String
+  role               UserRole            @default(EMPLOYEE)
+  firstName          String
+  lastName           String
+  department         String?
+  isActive           Boolean             @default(true)
+  mustChangePassword Boolean             @default(false)
+  vacationDaysTotal  Int                 @default(25)
+  vacationDaysUsed   Int                 @default(0)
+  requests           VacationRequest[]
   adminNotifications AdminNotification[]
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 }
 
 model VacationRequest {
@@ -55,7 +58,8 @@ model VacationRequest {
   startDate    DateTime
   endDate      DateTime
   reason       String
-  absenceType  AbsenceType     @default(VACATION)
+  workingDays  Int            @default(0)
+  absenceType  AbsenceType    @default(VACATION)
   status       VacationStatus @default(PENDING)
   adminComment String?
   createdAt    DateTime       @default(now())
@@ -78,4 +82,11 @@ model AdminNotification {
 
   @@index([adminId, isRead])
   @@index([createdAt])
+}
+
+model PublicHoliday {
+  id        String   @id @default(cuid())
+  date      DateTime @unique
+  name      String
+  createdAt DateTime @default(now())
 }

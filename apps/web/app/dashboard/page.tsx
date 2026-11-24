@@ -7,8 +7,10 @@ import {
   fetchAdminUnreadNotificationCount,
   fetchEmployees,
   fetchSummary,
+  fetchTeamAbsences,
   fetchVacations
 } from '@/lib/api';
+import { workWeekKeys } from '@/lib/absences';
 import { requireToken, requireUser } from '@/lib/auth';
 import { AuthUser, EmployeeSummaryResponse } from '@vacation/shared';
 
@@ -48,7 +50,11 @@ async function AdminDashboardSection({ token }: { token: string }) {
 }
 
 async function EmployeeDashboardSection({ user, token }: { user: AuthUser; token: string }) {
-  const summary = (await fetchSummary(token)) as EmployeeSummaryResponse;
+  const week = workWeekKeys();
+  const [summary, teamAbsences] = await Promise.all([
+    fetchSummary(token) as Promise<EmployeeSummaryResponse>,
+    fetchTeamAbsences(token, week[0], week[week.length - 1])
+  ]);
 
-  return <EmployeeDashboard user={user} summary={summary} />;
+  return <EmployeeDashboard user={user} summary={summary} teamAbsences={teamAbsences} />;
 }

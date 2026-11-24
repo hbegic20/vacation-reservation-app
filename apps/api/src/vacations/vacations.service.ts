@@ -6,46 +6,40 @@ import {
 } from "@nestjs/common";
 import { AbsenceType, UserRole, VacationStatus } from "@prisma/client";
 import { RequestUser } from "../auth/types";
+import { startOfUtcDay, toDateKey } from "../common/dates";
+import { HolidaysService } from "../holidays/holidays.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateSickLeaveDto } from "./dto/create-sick-leave.dto";
 import { CreateVacationRequestDto } from "./dto/create-vacation-request.dto";
+
+const maxTeamRangeInDays = 62;
 
 @Injectable()
 export class VacationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly holidaysService: HolidaysService,
   ) {}
 
-  private getDateKey(date: Date): string {
-    const year = date.getUTCFullYear();
-    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-    const day = String(date.getUTCDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  }
-
-  private calculateBusinessDays(startDate: Date, endDate: Date): number {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    let days = 0;
-
-    for (
-      let date = new Date(start);
-      date <= end;
-      date.setUTCDate(date.getUTCDate() + 1)
-    ) {
-      const day = date.getUTCDay();
-      if (day !== 0 && day !== 6) {
-        days += 1;
-      }
-    }
-
-    return days;
+  private async notifyEmployeeOfOutcome(
+    request: { userId: string; startDate: Date; endDate: Date },
+    subject: string,
+    outcome: string,
+    adminComment: string | null,
+  ) {
+    const range = `${toDateKey(request.startDate)} to ${toDateKey(request.endDate)}`;
+    const comment = adminComment ? `\n\nComment: ${adminComment}` : "";
+    await this.notificationsService.notifyEmployee(
+      request.userId,
+      subject,
+      `Your time off from ${range} ${outcome}.${comment}`,
+    );
   }
 
   async createRequest(user: RequestUser, dto: CreateVacationRequestDto) {
-    const requestedDays = this.calculateBusinessDays(
+    const requestedDays = await this.holidaysService.countWorkingDays(
       dto.startDate,
       dto.endDate,
     );
@@ -74,6 +68,7 @@ export class VacationsService {
         startDate: dto.startDate,
         endDate: dto.endDate,
         reason: dto.reason,
+        workingDays: requestedDays,
         absenceType: AbsenceType.VACATION,
         status: VacationStatus.PENDING,
       },
@@ -128,6 +123,10 @@ export class VacationsService {
         startDate: dto.startDate,
         endDate: dto.endDate,
         reason: dto.reason,
+        workingDays: await this.holidaysService.countWorkingDays(
+          dto.startDate,
+          dto.endDate,
+        ),
         absenceType: AbsenceType.SICK,
         status: VacationStatus.APPROVED,
         adminComment: dto.adminComment ?? "Marked as sick leave by admin",
@@ -155,6 +154,13 @@ export class VacationsService {
         absenceType: sickEntry.absenceType,
       },
     });
+
+    await this.notifyEmployeeOfOutcome(
+      sickEntry,
+      "Sick leave recorded",
+      "was recorded as sick leave",
+      sickEntry.adminComment,
+    );
 
     return sickEntry;
   }
@@ -242,13 +248,17 @@ export class VacationsService {
         metadata: { requestId: approvedSick.id, userId: approvedSick.userId },
       });
 
+      await this.notifyEmployeeOfOutcome(
+        approvedSick,
+        "Request approved",
+        "was approved",
+        approvedSick.adminComment,
+      );
+
       return approvedSick;
     }
 
-    const requestedDays = this.calculateBusinessDays(
-      request.startDate,
-      request.endDate,
-    );
+    const requestedDays = request.workingDays;
     const remainingDays =
       request.user.vacationDaysTotal - request.user.vacationDaysUsed;
     if (requestedDays > remainingDays) {
@@ -297,6 +307,13 @@ export class VacationsService {
       },
     });
 
+    await this.notifyEmployeeOfOutcome(
+      approvedVacation,
+      "Vacation approved",
+      "was approved",
+      approvedVacation.adminComment,
+    );
+
     return approvedVacation;
   }
 
@@ -343,6 +360,13 @@ export class VacationsService {
       message: `${requestUser?.firstName ?? "Employee"} ${requestUser?.lastName ?? ""}'s request was rejected.`,
       metadata: { requestId: rejected.id, userId: rejected.userId },
     });
+
+    await this.notifyEmployeeOfOutcome(
+      rejected,
+      "Vacation request rejected",
+      "was rejected",
+      rejected.adminComment,
+    );
 
     return rejected;
   }
@@ -423,6 +447,98 @@ export class VacationsService {
     };
   }
 
+  async cancel(user: RequestUser, requestId: string) {
+    const request = await this.prisma.vacationRequest.findFirst({
+      where: { id: requestId, userId: user.id },
+      include: { user: { select: { firstName: true, lastName: true } } },
+    });
+    if (!request) {
+      throw new NotFoundException("Vacation request not found");
+    }
+
+    const hasStarted =
+      startOfUtcDay(request.startDate) <= startOfUtcDay(new Date());
+    const isCancellable =
+      request.status === VacationStatus.PENDING ||
+      (request.status === VacationStatus.APPROVED && !hasStarted);
+    if (!isCancellable) {
+      throw new BadRequestException(
+        "Only pending requests or approved time off that has not started can be cancelled",
+      );
+    }
+
+    const refundsAllowance =
+      request.status === VacationStatus.APPROVED &&
+      request.absenceType === AbsenceType.VACATION;
+
+    const cancelled = await this.prisma.$transaction(async (tx) => {
+      if (refundsAllowance) {
+        await tx.user.update({
+          where: { id: request.userId },
+          data: { vacationDaysUsed: { decrement: request.workingDays } },
+        });
+      }
+
+      return tx.vacationRequest.update({
+        where: { id: requestId },
+        data: { status: VacationStatus.CANCELLED },
+      });
+    });
+
+    await this.notificationsService.createAndDispatch({
+      type: "VACATION_CANCELLED",
+      title: "Request cancelled",
+      message: `${request.user.firstName} ${request.user.lastName} cancelled their ${request.status === VacationStatus.APPROVED ? "approved" : "pending"} request (${toDateKey(request.startDate)} to ${toDateKey(request.endDate)}).`,
+      metadata: { requestId: cancelled.id, userId: cancelled.userId },
+    });
+
+    return cancelled;
+  }
+
+  async listTeamAbsences(user: RequestUser, from: Date, to: Date) {
+    const millisecondsPerDay = 86_400_000;
+    const spanInDays =
+      (startOfUtcDay(to).getTime() - startOfUtcDay(from).getTime()) /
+      millisecondsPerDay;
+    if (spanInDays > maxTeamRangeInDays) {
+      throw new BadRequestException(
+        `The range can cover at most ${maxTeamRangeInDays} days`,
+      );
+    }
+
+    const member = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { department: true },
+    });
+    if (!member?.department) {
+      return [];
+    }
+
+    const absences = await this.prisma.vacationRequest.findMany({
+      where: {
+        status: VacationStatus.APPROVED,
+        startDate: { lte: startOfUtcDay(to) },
+        endDate: { gte: startOfUtcDay(from) },
+        userId: { not: user.id },
+        user: { department: member.department, isActive: true },
+      },
+      select: {
+        id: true,
+        startDate: true,
+        endDate: true,
+        user: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { startDate: "asc" },
+    });
+
+    return absences.map((absence) => ({
+      id: absence.id,
+      startDate: absence.startDate,
+      endDate: absence.endDate,
+      person: absence.user,
+    }));
+  }
+
   async getCalendarByYear(year: number) {
     if (!Number.isInteger(year) || year < 2000 || year > 2100) {
       throw new BadRequestException(
@@ -437,6 +553,7 @@ export class VacationsService {
       where: {
         startDate: { lte: yearEnd },
         endDate: { gte: yearStart },
+        status: { not: VacationStatus.CANCELLED },
       },
       select: {
         id: true,
@@ -444,6 +561,7 @@ export class VacationsService {
         startDate: true,
         endDate: true,
         reason: true,
+        workingDays: true,
         absenceType: true,
         status: true,
         user: {
@@ -469,6 +587,7 @@ export class VacationsService {
           startDate: Date;
           endDate: Date;
           reason: string;
+          workingDays: number;
           absenceType: AbsenceType;
           status: VacationStatus;
           user: {
@@ -507,7 +626,7 @@ export class VacationsService {
           continue;
         }
 
-        const key = this.getDateKey(cursor);
+        const key = toDateKey(cursor);
         const existing = daysMap.get(key);
         const dayEntry = existing ?? { date: key, requests: [] };
         dayEntry.requests.push({
@@ -516,6 +635,7 @@ export class VacationsService {
           startDate: request.startDate,
           endDate: request.endDate,
           reason: request.reason,
+          workingDays: request.workingDays,
           absenceType: request.absenceType,
           status: request.status,
           user: request.user,

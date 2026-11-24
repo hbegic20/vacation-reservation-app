@@ -3,7 +3,7 @@ import { VacationRequest } from '@vacation/shared';
 import { Avatar } from '@/components/ui/avatar';
 import { buttonStyles } from '@/components/ui/button';
 import { daysSince, overlappingTeammates } from '@/lib/absences';
-import { countWorkingDays, formatDateRange } from '@/lib/dates';
+import { formatDateRange } from '@/lib/dates';
 import { plural, requesterName } from '@/lib/people';
 
 const previewLimit = 3;
@@ -74,7 +74,7 @@ export function PendingApprovalsCard({ pending, allRequests }: PendingApprovalsC
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {formatDateRange(request.startDate, request.endDate)} ·{' '}
-                  {plural(countWorkingDays(request.startDate, request.endDate), 'working day')}
+                  {plural(request.workingDays, 'working day')}
                 </p>
               </div>
               {teammates.length > 0 ? (

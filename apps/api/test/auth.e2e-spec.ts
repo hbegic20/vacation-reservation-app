@@ -74,6 +74,60 @@ describe("Auth endpoints", () => {
     });
   });
 
+  describe("POST /api/auth/change-password", () => {
+    it("changes the password", async () => {
+      testApp.prisma.user.findUnique.mockResolvedValue(
+        buildUser({ password: await hash("temporary-pass", 4) }),
+      );
+
+      const response = await request(testApp.app.getHttpServer())
+        .post("/api/auth/change-password")
+        .set(bearer(testApp.employeeToken))
+        .send({
+          currentPassword: "temporary-pass",
+          newPassword: "my-own-password",
+        })
+        .expect(200);
+
+      expect(response.body).toEqual({ success: true });
+      expect(testApp.prisma.user.update.mock.calls[0][0].where).toEqual({
+        id: "employee-1",
+      });
+    });
+
+    it("returns 400 for a new password shorter than 8 characters", async () => {
+      await request(testApp.app.getHttpServer())
+        .post("/api/auth/change-password")
+        .set(bearer(testApp.employeeToken))
+        .send({ currentPassword: "temporary-pass", newPassword: "short" })
+        .expect(400);
+
+      expect(testApp.prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 for a wrong current password", async () => {
+      testApp.prisma.user.findUnique.mockResolvedValue(
+        buildUser({ password: await hash("temporary-pass", 4) }),
+      );
+
+      await request(testApp.app.getHttpServer())
+        .post("/api/auth/change-password")
+        .set(bearer(testApp.employeeToken))
+        .send({ currentPassword: "guess-1234", newPassword: "my-own-password" })
+        .expect(400);
+    });
+
+    it("returns 401 without a token", async () => {
+      await request(testApp.app.getHttpServer())
+        .post("/api/auth/change-password")
+        .send({
+          currentPassword: "temporary-pass",
+          newPassword: "my-own-password",
+        })
+        .expect(401);
+    });
+  });
+
   describe("GET /api/me", () => {
     it("returns the signed-in user's public profile", async () => {
       testApp.prisma.user.findUnique.mockResolvedValue({

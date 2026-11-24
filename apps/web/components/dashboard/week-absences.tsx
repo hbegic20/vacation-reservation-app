@@ -1,5 +1,5 @@
 import { VacationRequest } from '@vacation/shared';
-import { overlapsRange, todayKey, workWeekKeys } from '@/lib/absences';
+import { isActiveAbsence, overlapsRange, todayKey, workWeekKeys } from '@/lib/absences';
 import { toDateKey } from '@/lib/dates';
 import { absenceTypeLabels } from '@/lib/labels';
 import { requesterName } from '@/lib/people';
@@ -20,7 +20,7 @@ function toWeekRows(requests: VacationRequest[], weekKeys: string[]): WeekRow[] 
   const firstKey = weekKeys[0];
   const lastKey = weekKeys[weekKeys.length - 1];
   return requests
-    .filter((request) => request.status !== 'REJECTED' && overlapsRange(request, firstKey, lastKey))
+    .filter((request) => isActiveAbsence(request.status) && overlapsRange(request, firstKey, lastKey))
     .sort((a, b) => a.startDate.localeCompare(b.startDate))
     .map((request) => {
       const startKey = toDateKey(request.startDate);

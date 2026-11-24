@@ -154,6 +154,112 @@ describe("Vacation endpoints", () => {
     });
   });
 
+  describe("GET /api/vacations/team", () => {
+    it("returns teammates' absences without reasons or types", async () => {
+      testApp.prisma.user.findUnique.mockResolvedValue({
+        department: "Engineering",
+      });
+      testApp.prisma.vacationRequest.findMany.mockResolvedValue([
+        {
+          id: "request-2",
+          startDate: new Date("2026-03-10T00:00:00.000Z"),
+          endDate: new Date("2026-03-11T00:00:00.000Z"),
+          user: { id: "employee-2", firstName: "Amina", lastName: "Kovač" },
+        },
+      ]);
+
+      const response = await http()
+        .get("/api/vacations/team?from=2026-03-09&to=2026-03-15")
+        .set(asEmployee())
+        .expect(200);
+
+      expect(response.body).toEqual([
+        {
+          id: "request-2",
+          startDate: "2026-03-10T00:00:00.000Z",
+          endDate: "2026-03-11T00:00:00.000Z",
+          person: { id: "employee-2", firstName: "Amina", lastName: "Kovač" },
+        },
+      ]);
+    });
+
+    it("returns 400 when a date is missing", async () => {
+      await http()
+        .get("/api/vacations/team?from=2026-03-09")
+        .set(asEmployee())
+        .expect(400);
+    });
+
+    it("returns 400 when the range is reversed", async () => {
+      await http()
+        .get("/api/vacations/team?from=2026-03-15&to=2026-03-09")
+        .set(asEmployee())
+        .expect(400);
+    });
+
+    it("returns 401 without a token", async () => {
+      await http()
+        .get("/api/vacations/team?from=2026-03-09&to=2026-03-15")
+        .expect(401);
+    });
+  });
+
+  describe("PATCH /api/vacations/:id/cancel", () => {
+    function givenOwnRequest(status: VacationStatus, startDate: string) {
+      testApp.prisma.vacationRequest.findFirst.mockResolvedValue({
+        ...buildRequest({
+          status,
+          startDate: new Date(`${startDate}T00:00:00.000Z`),
+          endDate: new Date(`${startDate}T00:00:00.000Z`),
+          workingDays: 1,
+        }),
+        user: { firstName: "John", lastName: "Employee" },
+      });
+      testApp.prisma.vacationRequest.update.mockResolvedValue(
+        buildRequest({ status: VacationStatus.CANCELLED }),
+      );
+    }
+
+    it("cancels approved future time off and refunds the days", async () => {
+      givenOwnRequest(VacationStatus.APPROVED, "2099-06-01");
+
+      const response = await http()
+        .patch("/api/vacations/request-1/cancel")
+        .set(asEmployee())
+        .expect(200);
+
+      expect(response.body.status).toBe("CANCELLED");
+      expect(testApp.prisma.user.update.mock.calls[0][0].data).toEqual({
+        vacationDaysUsed: { decrement: 1 },
+      });
+    });
+
+    it("returns 400 for approved time off that has already started", async () => {
+      givenOwnRequest(VacationStatus.APPROVED, "2020-01-06");
+
+      await http()
+        .patch("/api/vacations/request-1/cancel")
+        .set(asEmployee())
+        .expect(400);
+    });
+
+    it("returns 404 for someone else's request", async () => {
+      testApp.prisma.vacationRequest.findFirst.mockResolvedValue(null);
+
+      await http()
+        .patch("/api/vacations/request-9/cancel")
+        .set(asEmployee())
+        .expect(404);
+    });
+
+    it("returns 403 for admins", async () => {
+      await http()
+        .patch("/api/vacations/request-1/cancel")
+        .set(asAdmin())
+        .expect(403);
+    });
+  });
+
   describe("GET /api/vacations/summary", () => {
     it("returns the employee summary", async () => {
       testApp.prisma.user.findUnique.mockResolvedValue(buildUser());

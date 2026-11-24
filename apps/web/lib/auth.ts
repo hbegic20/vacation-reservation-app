@@ -33,10 +33,21 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
   return response.json();
 });
 
-export async function requireUser() {
+export const changePasswordPath = '/account/password';
+
+export async function requireSignedIn() {
   const user = await getCurrentUser();
   if (!user) {
     redirect('/login');
+  }
+
+  return user;
+}
+
+export async function requireUser() {
+  const user = await requireSignedIn();
+  if (user.mustChangePassword) {
+    redirect(changePasswordPath);
   }
 
   return user;

@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { VacationRequest } from '@vacation/shared';
 import { StatusBadge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { countWorkingDays, dayOfMonth, daysUntil, formatDateRange, monthShort } from '@/lib/dates';
+import { dayOfMonth, daysUntil, formatDateRange, monthShort } from '@/lib/dates';
+import { plural } from '@/lib/people';
 
 function startsInLabel(days: number): string {
   if (days <= 0) {
@@ -27,7 +28,7 @@ export function NextTimeOffCard({ vacation }: { vacation: VacationRequest | unde
             <div>
               <p className="text-base font-semibold">{formatDateRange(vacation.startDate, vacation.endDate)}</p>
               <p className="text-sm text-muted-foreground">
-                {countWorkingDays(vacation.startDate, vacation.endDate)} working days
+                {plural(vacation.workingDays, 'working day')}
               </p>
             </div>
           </div>

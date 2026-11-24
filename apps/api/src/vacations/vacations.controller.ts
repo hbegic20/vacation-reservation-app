@@ -17,6 +17,7 @@ import { RequestUser } from "../auth/types";
 import { AdminCommentDto } from "./dto/admin-comment.dto";
 import { CreateSickLeaveDto } from "./dto/create-sick-leave.dto";
 import { CreateVacationRequestDto } from "./dto/create-vacation-request.dto";
+import { TeamAbsencesQueryDto } from "./dto/team-absences-query.dto";
 import { VacationsService } from "./vacations.service";
 
 @Controller("vacations")
@@ -54,6 +55,11 @@ export class VacationsController {
     return this.vacationsService.listApproved();
   }
 
+  @Get("team")
+  team(@CurrentUser() user: RequestUser, @Query() query: TeamAbsencesQueryDto) {
+    return this.vacationsService.listTeamAbsences(user, query.from, query.to);
+  }
+
   @Get("summary")
   summary(@CurrentUser() user: RequestUser) {
     return this.vacationsService.getSummary(user);
@@ -64,6 +70,12 @@ export class VacationsController {
   calendar(@Query("year") year?: string) {
     const parsedYear = year ? Number(year) : new Date().getUTCFullYear();
     return this.vacationsService.getCalendarByYear(parsedYear);
+  }
+
+  @Patch(":id/cancel")
+  @Roles(UserRole.EMPLOYEE)
+  cancel(@CurrentUser() user: RequestUser, @Param("id") id: string) {
+    return this.vacationsService.cancel(user, id);
   }
 
   @Patch(":id/approve")

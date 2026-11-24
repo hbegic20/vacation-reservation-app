@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { PageShell } from '@/components/layout/page-shell';
 import { buttonStyles } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
-import { todayKey } from '@/lib/absences';
+import { isActiveAbsence, todayKey } from '@/lib/absences';
 import { fetchVacations } from '@/lib/api';
 import { requireToken, requireUser } from '@/lib/auth';
 import { toDateKey } from '@/lib/dates';
@@ -15,7 +15,7 @@ import { toDateKey } from '@/lib/dates';
 export const metadata: Metadata = { title: 'My requests' };
 
 function isComingUp(request: VacationRequest, today: string): boolean {
-  return request.status !== 'REJECTED' && toDateKey(request.endDate) >= today;
+  return isActiveAbsence(request.status) && toDateKey(request.endDate) >= today;
 }
 
 function RequestSection({ id, title, requests }: { id: string; title: string; requests: VacationRequest[] }) {
@@ -65,7 +65,7 @@ export default async function VacationsPage() {
           {comingUp.length > 0 ? (
             <RequestSection id="coming-up-title" title="Coming up" requests={comingUp} />
           ) : null}
-          {past.length > 0 ? <RequestSection id="past-title" title="Past and rejected" requests={past} /> : null}
+          {past.length > 0 ? <RequestSection id="past-title" title="Past, rejected and cancelled" requests={past} /> : null}
         </>
       )}
     </PageShell>

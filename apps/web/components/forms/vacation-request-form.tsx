@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { PublicHoliday } from '@vacation/shared';
+import { useEffect, useMemo, useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { createVacationAction } from '@/app/actions';
-import { countWorkingDays, localDateKey } from '@/lib/dates';
+import { countWorkingDays, localDateKey, toDateKey } from '@/lib/dates';
 import { plural } from '@/lib/people';
 import { Button, buttonStyles } from '../ui/button';
 import { FormMessage } from '../ui/form-message';
@@ -51,7 +52,17 @@ function SummaryRow({ label, value, emphasis }: { label: string; value: string; 
   );
 }
 
-export function VacationRequestForm({ availableDays }: { availableDays: number }) {
+interface VacationRequestFormProps {
+  availableDays: number;
+  holidays: PublicHoliday[];
+}
+
+function isWeekday(dateKey: string): boolean {
+  const weekday = new Date(`${dateKey}T00:00:00Z`).getUTCDay();
+  return weekday !== 0 && weekday !== 6;
+}
+
+export function VacationRequestForm({ availableDays, holidays }: VacationRequestFormProps) {
   const [state, formAction] = useFormState(createVacationAction, initialState);
   const formRef = useResetOnSuccess(state);
   const [range, setRange] = useState<DateRange>(emptyRange);
@@ -63,7 +74,14 @@ export function VacationRequestForm({ availableDays }: { availableDays: number }
   }, [state]);
 
   const hasRange = range.startDate !== '' && range.endDate !== '' && range.endDate >= range.startDate;
-  const workingDays = hasRange ? countWorkingDays(range.startDate, range.endDate) : 0;
+  const holidayKeys = useMemo(() => new Set(holidays.map((holiday) => toDateKey(holiday.date))), [holidays]);
+  const workingDays = hasRange ? countWorkingDays(range.startDate, range.endDate, holidayKeys) : 0;
+  const holidaysInRange = hasRange
+    ? holidays.filter((holiday) => {
+        const key = toDateKey(holiday.date);
+        return key >= range.startDate && key <= range.endDate && isWeekday(key);
+      })
+    : [];
   const error = rangeError(range, workingDays, availableDays);
   const leftAfter = availableDays - workingDays;
   const today = localDateKey(new Date());
@@ -177,9 +195,13 @@ export function VacationRequestForm({ availableDays }: { availableDays: number }
             </dl>
           </>
         )}
-        <p className="text-[13px] text-muted-foreground">
-          Weekends are not counted. Public holidays are not counted yet.
-        </p>
+        {holidaysInRange.length > 0 ? (
+          <p className="rounded-xl bg-primary-soft px-3.5 py-2.5 text-sm text-primary-text">
+            Includes {holidaysInRange.map((holiday) => holiday.name).join(', ')}, which{' '}
+            {holidaysInRange.length === 1 ? 'isn’t' : 'aren’t'} counted.
+          </p>
+        ) : null}
+        <p className="text-[13px] text-muted-foreground">Weekends and public holidays are not counted.</p>
       </aside>
     </div>
   );

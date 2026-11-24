@@ -117,6 +117,58 @@ describe("NotificationsService", () => {
     });
   });
 
+  describe("notifyEmployee", () => {
+    const resend = {
+      EMAIL_PROVIDER: "resend",
+      RESEND_API_KEY: "re_test",
+      EMAIL_FROM: "hub@company.com",
+    };
+
+    it("emails the employee through Resend when configured", async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        email: "john.employee@company.com",
+        isActive: true,
+      });
+
+      await createService(resend).notifyEmployee(
+        "employee-1",
+        "Vacation approved",
+        "Your time off was approved.",
+      );
+
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe("https://api.resend.com/emails");
+      expect(JSON.parse(init.body)).toEqual({
+        from: "hub@company.com",
+        to: ["john.employee@company.com"],
+        subject: "Vacation approved",
+        text: "Your time off was approved.",
+      });
+    });
+
+    it("does nothing when email is not configured", async () => {
+      await createService().notifyEmployee("employee-1", "Subject", "Text");
+
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("skips inactive employees", async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        email: "former@company.com",
+        isActive: false,
+      });
+
+      await createService(resend).notifyEmployee(
+        "employee-9",
+        "Subject",
+        "Text",
+      );
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
   it("lists only unread notifications for the admin when asked", async () => {
     prisma.adminNotification.findMany.mockResolvedValue([]);
 

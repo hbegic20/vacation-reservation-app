@@ -1,7 +1,11 @@
-import { VacationRequest } from '@vacation/shared';
+import { VacationRequest, VacationStatus } from '@vacation/shared';
 import { toDateKey } from './dates';
 
 const millisecondsPerDay = 86_400_000;
+
+export function isActiveAbsence(status: VacationStatus): boolean {
+  return status === 'PENDING' || status === 'APPROVED';
+}
 
 export function coversDate(request: VacationRequest, dateKey: string): boolean {
   return toDateKey(request.startDate) <= dateKey && dateKey <= toDateKey(request.endDate);
@@ -47,4 +51,11 @@ export function overlappingTeammates(request: VacationRequest, requests: Vacatio
     .map((other) => (other.user ? `${other.user.firstName} ${other.user.lastName}` : other.userId));
 
   return Array.from(new Set(names));
+}
+
+export function canCancel(request: VacationRequest, today: string = todayKey()): boolean {
+  if (request.status === 'PENDING') {
+    return true;
+  }
+  return request.status === 'APPROVED' && toDateKey(request.startDate) > today;
 }

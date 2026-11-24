@@ -3,6 +3,14 @@ import { hash } from 'bcrypt';
 
 const prisma = new PrismaClient();
 
+const fixedDateHolidays = [
+  { month: 1, day: 1, name: 'New Year' },
+  { month: 1, day: 2, name: 'New Year (second day)' },
+  { month: 3, day: 1, name: 'Independence Day' },
+  { month: 5, day: 1, name: 'Labour Day' },
+  { month: 5, day: 2, name: 'Labour Day (second day)' }
+];
+
 async function main() {
   const adminPassword = await hash('admin1234', 10);
   const employeePassword = await hash('employee1234', 10);
@@ -61,6 +69,7 @@ async function main() {
       startDate: new Date('2026-03-10'),
       endDate: new Date('2026-03-14'),
       reason: 'Family trip',
+      workingDays: 4,
       absenceType: AbsenceType.VACATION,
       status: VacationStatus.APPROVED,
       adminComment: 'Approved. Enjoy your vacation.'
@@ -76,6 +85,7 @@ async function main() {
       startDate: new Date('2026-04-22'),
       endDate: new Date('2026-04-24'),
       reason: 'Personal errands',
+      workingDays: 3,
       absenceType: AbsenceType.VACATION,
       status: VacationStatus.PENDING,
       adminComment: null
@@ -91,11 +101,23 @@ async function main() {
       startDate: new Date('2026-02-12'),
       endDate: new Date('2026-02-12'),
       reason: 'Flu',
+      workingDays: 1,
       absenceType: AbsenceType.SICK,
       status: VacationStatus.APPROVED,
       adminComment: 'Marked as sick leave by admin.'
     }
   });
+
+  for (const year of [2026, 2027]) {
+    for (const holiday of fixedDateHolidays) {
+      const date = new Date(Date.UTC(year, holiday.month - 1, holiday.day));
+      await prisma.publicHoliday.upsert({
+        where: { date },
+        update: {},
+        create: { date, name: holiday.name }
+      });
+    }
+  }
 
   console.log(`Seeded admin: ${admin.email}`);
   console.log(`Seeded employee: ${employee.email}`);

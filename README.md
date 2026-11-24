@@ -26,6 +26,11 @@ Production-oriented monorepo for company leave management with a split architect
 - In-app admin notification center on dashboard
 - Optional Email/Slack notifications for request submit/approve/reject/sick leave
 - Daily digest notification for pending approvals (8:00 UTC)
+- Employees can cancel pending requests and approved time off that hasn't started (days are returned)
+- Employees get an email when a request is approved, rejected or recorded as sick leave (Resend)
+- Public holidays managed by admins; they don't count as working days
+- "Out on your team this week" for employees (same department, names and dates only)
+- Temporary passwords: users must choose their own password on first sign-in or after a reset
 
 ## Key Frontend Routes
 - `/login`
@@ -39,6 +44,8 @@ Production-oriented monorepo for company leave management with a split architect
 - `/admin/employees/[id]/edit`
 - `/admin/calendar`
 - `/admin/admins`
+- `/admin/holidays`
+- `/account/password`
 - Light/dark theme + subtle UI animations
 
 ## Project Structure
@@ -72,14 +79,20 @@ All routes are prefixed with `/api` by Nest.
 
 - `POST /api/auth/login`
 - `GET /api/me`
+- `POST /api/auth/change-password`
 - `POST /api/vacations`
 - `GET /api/vacations`
 - `GET /api/vacations/approved` (admin only)
 - `GET /api/vacations/summary`
+- `GET /api/vacations/team?from=2026-03-09&to=2026-03-15` (same-department colleagues, names and dates only)
+- `PATCH /api/vacations/:id/cancel` (employee, own requests)
 - `PATCH /api/vacations/:id/approve`
 - `PATCH /api/vacations/:id/reject`
 - `GET /api/vacations/calendar?year=2026`
 - `POST /api/vacations/sick`
+- `GET /api/holidays?year=2026`
+- `POST /api/holidays` (admin only)
+- `DELETE /api/holidays/:id` (admin only)
 - `GET /api/notifications/admin`
 - `GET /api/notifications/admin/unread-count`
 - `PATCH /api/notifications/:id/read`
@@ -122,7 +135,7 @@ Supported external notification env vars:
 npm run prisma:generate -w @vacation/api
 npm run prisma:migrate -w @vacation/api
 ```
-This revision adds new columns/enums (`firstName`, `lastName`, `department`, `isActive`, `absenceType`), so run migrations after pulling latest code.
+Migrations are committed in `apps/api/prisma/migrations`; run this after pulling to apply new ones.
 
 ### 5. Seed sample data
 ```bash

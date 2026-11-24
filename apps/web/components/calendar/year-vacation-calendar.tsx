@@ -1,9 +1,10 @@
 'use client';
 
-import { VacationCalendarDay, VacationCalendarRequestItem } from '@vacation/shared';
+import { PublicHoliday, VacationCalendarDay, VacationCalendarRequestItem } from '@vacation/shared';
 import { ReactNode, useMemo, useRef, useState } from 'react';
 import { StatusBadge } from '@/components/ui/badge';
-import { countWorkingDays, formatDateRange, formatLongDate } from '@/lib/dates';
+import { isActiveAbsence } from '@/lib/absences';
+import { formatDateRange, formatLongDate, toDateKey } from '@/lib/dates';
 import { absenceTypeLabels, statusLabels } from '@/lib/labels';
 import { plural } from '@/lib/people';
 import { cn } from '@/lib/utils';
@@ -33,7 +34,7 @@ function monthCells(year: number, monthIndex: number): (CalendarCell | null)[] {
 }
 
 function activeRequests(requests: DayRequests): DayRequests {
-  return requests.filter((request) => request.status !== 'REJECTED');
+  return requests.filter((request) => isActiveAbsence(request.status));
 }
 
 function cellTone(requests: DayRequests): string {
@@ -50,13 +51,18 @@ function cellTone(requests: DayRequests): string {
   return 'text-muted-foreground underline decoration-dotted underline-offset-2';
 }
 
-function describeDay(key: string, requests: DayRequests): string {
+const holidayTone = 'bg-muted text-foreground ring-1 ring-inset ring-input';
+
+function describeDay(key: string, requests: DayRequests, holidayName: string | undefined): string {
   const counts = new Map<string, number>();
   requests.forEach((request) => {
     const label = request.absenceType === 'SICK' ? 'sick' : statusLabels[request.status].toLowerCase();
     counts.set(label, (counts.get(label) ?? 0) + 1);
   });
   const parts = Array.from(counts, ([label, count]) => `${count} ${label}`);
+  if (holidayName) {
+    parts.unshift(`public holiday, ${holidayName}`);
+  }
   return `${formatLongDate(key)}: ${parts.join(', ')}`;
 }
 
@@ -72,12 +78,13 @@ interface MonthProps {
   year: number;
   monthIndex: number;
   byDate: Map<string, DayRequests>;
+  holidayNames: Map<string, string>;
   selectedDate: string | null;
   today: string;
   onSelect: (key: string) => void;
 }
 
-function Month({ year, monthIndex, byDate, selectedDate, today, onSelect }: MonthProps) {
+function Month({ year, monthIndex, byDate, holidayNames, selectedDate, today, onSelect }: MonthProps) {
   const monthName = monthFormatter.format(new Date(Date.UTC(year, monthIndex, 1)));
 
   return (
@@ -93,9 +100,10 @@ function Month({ year, monthIndex, byDate, selectedDate, today, onSelect }: Mont
           if (!cell) {
             return <span key={`blank-${index}`} aria-hidden="true" />;
           }
-          const requests = byDate.get(cell.key);
+          const requests = byDate.get(cell.key) ?? [];
+          const holidayName = holidayNames.get(cell.key);
           const isToday = cell.key === today;
-          if (!requests) {
+          if (requests.length === 0 && !holidayName) {
             return (
               <span
                 key={cell.key}
@@ -115,12 +123,12 @@ function Month({ year, monthIndex, byDate, selectedDate, today, onSelect }: Mont
             <button
               key={cell.key}
               type="button"
-              aria-label={describeDay(cell.key, requests)}
+              aria-label={describeDay(cell.key, requests, holidayName)}
               aria-pressed={isSelected}
               onClick={() => onSelect(cell.key)}
               className={cn(
                 'relative grid h-9 place-items-center rounded-lg font-semibold transition',
-                cellTone(requests),
+                requests.length > 0 ? cellTone(requests) : holidayTone,
                 isSelected ? 'outline outline-2 outline-offset-2 outline-foreground' : '',
                 isToday ? 'underline decoration-2 underline-offset-2' : ''
               )}
@@ -142,7 +150,13 @@ function Month({ year, monthIndex, byDate, selectedDate, today, onSelect }: Mont
   );
 }
 
-function DayDetails({ selectedDate, requests }: { selectedDate: string | null; requests: DayRequests }) {
+interface DayDetailsProps {
+  selectedDate: string | null;
+  requests: DayRequests;
+  holidayName: string | undefined;
+}
+
+function DayDetails({ selectedDate, requests, holidayName }: DayDetailsProps) {
   if (!selectedDate) {
     return <p className="text-sm text-muted-foreground">No absences recorded this year.</p>;
   }
@@ -150,6 +164,11 @@ function DayDetails({ selectedDate, requests }: { selectedDate: string | null; r
   return (
     <>
       <p className="text-sm font-semibold">{formatLongDate(selectedDate)}</p>
+      {holidayName ? (
+        <p className="rounded-xl bg-muted px-3.5 py-2.5 text-sm">
+          Public holiday: <span className="font-semibold">{holidayName}</span>
+        </p>
+      ) : null}
       <ul className="flex flex-col gap-2.5">
         {requests.map((request) => (
           <li key={request.id} className="rounded-xl bg-muted p-3.5 text-sm">
@@ -166,7 +185,7 @@ function DayDetails({ selectedDate, requests }: { selectedDate: string | null; r
             </div>
             <p className="mt-2">
               {absenceTypeLabels[request.absenceType]} · {formatDateRange(request.startDate, request.endDate)} ·{' '}
-              {plural(countWorkingDays(request.startDate, request.endDate), 'working day')}
+              {plural(request.workingDays, 'working day')}
             </p>
             <p className="mt-0.5 text-muted-foreground">“{request.reason}”</p>
           </li>
@@ -180,11 +199,16 @@ interface YearVacationCalendarProps {
   year: number;
   today: string;
   days: VacationCalendarDay[];
+  holidays: PublicHoliday[];
   sidePanelFooter: ReactNode;
 }
 
-export function YearVacationCalendar({ year, today, days, sidePanelFooter }: YearVacationCalendarProps) {
+export function YearVacationCalendar({ year, today, days, holidays, sidePanelFooter }: YearVacationCalendarProps) {
   const byDate = useMemo(() => new Map(days.map((entry) => [entry.date, entry.requests])), [days]);
+  const holidayNames = useMemo(
+    () => new Map(holidays.map((holiday) => [toDateKey(holiday.date), holiday.name])),
+    [holidays]
+  );
   const [selectedDate, setSelectedDate] = useState<string | null>(() => initialSelection(days, today));
   const detailsRef = useRef<HTMLElement>(null);
 
@@ -205,6 +229,7 @@ export function YearVacationCalendar({ year, today, days, sidePanelFooter }: Yea
             year={year}
             monthIndex={monthIndex}
             byDate={byDate}
+            holidayNames={holidayNames}
             selectedDate={selectedDate}
             today={today}
             onSelect={selectDate}
@@ -221,7 +246,11 @@ export function YearVacationCalendar({ year, today, days, sidePanelFooter }: Yea
           <h2 id="day-details-title" className="font-display text-[17px] font-semibold">
             Day details
           </h2>
-          <DayDetails selectedDate={selectedDate} requests={selectedDate ? (byDate.get(selectedDate) ?? []) : []} />
+          <DayDetails
+            selectedDate={selectedDate}
+            requests={selectedDate ? (byDate.get(selectedDate) ?? []) : []}
+            holidayName={selectedDate ? holidayNames.get(selectedDate) : undefined}
+          />
         </section>
         {sidePanelFooter}
       </div>
