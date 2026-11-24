@@ -11,6 +11,7 @@ import {
   startOfWeek
 } from 'date-fns';
 import { useMemo, useState } from 'react';
+import { formatDateRange, formatLongDate, localDateKey } from '@/lib/dates';
 
 interface YearVacationCalendarProps {
   year: number;
@@ -18,13 +19,6 @@ interface YearVacationCalendarProps {
 }
 
 const monthNames = Array.from({ length: 12 }, (_, index) => new Date(Date.UTC(2026, index, 1)));
-
-function dateKey(day: Date): string {
-  const year = day.getFullYear();
-  const month = String(day.getMonth() + 1).padStart(2, '0');
-  const date = String(day.getDate()).padStart(2, '0');
-  return `${year}-${month}-${date}`;
-}
 
 function cellTone(dayRequests: VacationCalendarDay['requests']): string {
   if (dayRequests.some((request) => request.absenceType === 'SICK')) {
@@ -77,7 +71,7 @@ export function YearVacationCalendar({ year, days }: YearVacationCalendarProps) 
               </div>
               <div className="mt-1 grid grid-cols-7 gap-1 text-center text-xs">
                 {monthDays.map((day) => {
-                  const key = dateKey(day);
+                  const key = localDateKey(day);
                   const requests = byDate.get(key) ?? [];
                   const isSelected = selectedDate === key;
 
@@ -123,7 +117,7 @@ export function YearVacationCalendar({ year, days }: YearVacationCalendarProps) 
       <aside className="h-fit rounded-2xl border border-border bg-card p-4 shadow-soft xl:sticky xl:top-20">
         <h3 className="text-sm font-semibold">Day Details</h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          {selectedDate ? format(new Date(selectedDate), 'PPPP') : 'Select a date'}
+          {selectedDate ? formatLongDate(selectedDate) : 'Select a date'}
         </p>
 
         <div className="mt-3 space-y-2">
@@ -144,8 +138,7 @@ export function YearVacationCalendar({ year, days }: YearVacationCalendarProps) 
                 {request.absenceType} · {request.status}
               </p>
               <p className="text-xs text-muted-foreground">
-                {format(new Date(request.startDate), 'yyyy-MM-dd')} -{' '}
-                {format(new Date(request.endDate), 'yyyy-MM-dd')}
+                {formatDateRange(request.startDate, request.endDate)}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">{request.reason}</p>
             </div>

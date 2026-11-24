@@ -2,12 +2,13 @@ import { TopNav } from '@/components/layout/top-nav';
 import { CreateAdminForm } from '@/components/forms/create-admin-form';
 import { Card } from '@/components/ui/card';
 import { fetchAdmins } from '@/lib/api';
-import { getToken, requireAdmin } from '@/lib/auth';
+import { requireAdmin, requireToken } from '@/lib/auth';
+import { formatDate } from '@/lib/dates';
 
 export default async function AdminsPage() {
   const user = await requireAdmin();
-  const token = getToken();
-  const admins = await fetchAdmins(token!);
+  const token = requireToken();
+  const admins = await fetchAdmins(token);
 
   return (
     <div>
@@ -31,7 +32,7 @@ export default async function AdminsPage() {
                 <p className="text-muted-foreground">{admin.email}</p>
                 <p className="text-xs text-muted-foreground">
                   {admin.department || 'No department'} · Added{' '}
-                  {new Date(admin.createdAt).toLocaleDateString()}
+                  {formatDate(admin.createdAt)}
                 </p>
               </div>
             ))}

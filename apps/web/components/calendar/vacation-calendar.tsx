@@ -8,6 +8,7 @@ import {
   startOfMonth,
   startOfWeek
 } from 'date-fns';
+import { localDateKey, toDateKey } from '@/lib/dates';
 
 export function VacationCalendar({ vacations }: { vacations: VacationRequest[] }) {
   const monthStart = startOfMonth(new Date());
@@ -18,12 +19,12 @@ export function VacationCalendar({ vacations }: { vacations: VacationRequest[] }
     end: addDays(monthEnd, 13)
   }).slice(0, 42);
 
-  const isVacationDay = (day: Date) =>
-    vacations.some((vacation) => {
-      const start = new Date(vacation.startDate);
-      const end = new Date(vacation.endDate);
-      return day >= start && day <= end;
-    });
+  const isVacationDay = (day: Date) => {
+    const dayKey = localDateKey(day);
+    return vacations.some(
+      (vacation) => dayKey >= toDateKey(vacation.startDate) && dayKey <= toDateKey(vacation.endDate)
+    );
+  };
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">

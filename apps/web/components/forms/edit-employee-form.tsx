@@ -25,23 +25,24 @@ export function EditEmployeeForm({ employee }: { employee: EmployeeListItem }) {
       <input type="hidden" name="employeeId" value={employee.id} />
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-sm font-medium">First Name</label>
-          <Input name="firstName" defaultValue={employee.firstName} required />
+          <label htmlFor="employee-first-name" className="text-sm font-medium">First Name</label>
+          <Input id="employee-first-name" name="firstName" defaultValue={employee.firstName} required />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium">Last Name</label>
-          <Input name="lastName" defaultValue={employee.lastName} required />
+          <label htmlFor="employee-last-name" className="text-sm font-medium">Last Name</label>
+          <Input id="employee-last-name" name="lastName" defaultValue={employee.lastName} required />
         </div>
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium">Department</label>
-        <Input name="department" defaultValue={employee.department ?? ''} placeholder="Engineering" />
+        <label htmlFor="employee-department" className="text-sm font-medium">Department</label>
+        <Input id="employee-department" name="department" defaultValue={employee.department ?? ''} placeholder="Engineering" />
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium">Vacation Days Total</label>
+        <label htmlFor="employee-vacation-days" className="text-sm font-medium">Vacation Days Total</label>
         <Input
+          id="employee-vacation-days"
           name="vacationDaysTotal"
           type="number"
           min={1}

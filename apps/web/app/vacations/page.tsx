@@ -1,15 +1,16 @@
 import Link from 'next/link';
 import { TopNav } from '@/components/layout/top-nav';
 import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { buttonStyles } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/badge';
 import { fetchVacations } from '@/lib/api';
-import { getToken, requireUser } from '@/lib/auth';
+import { requireToken, requireUser } from '@/lib/auth';
+import { formatDateRange } from '@/lib/dates';
 
 export default async function VacationsPage() {
   const user = await requireUser();
-  const token = getToken();
-  const vacations = await fetchVacations(token!);
+  const token = requireToken();
+  const vacations = await fetchVacations(token);
 
   return (
     <div>
@@ -18,19 +19,27 @@ export default async function VacationsPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Vacation Requests</h1>
           {user.role === 'EMPLOYEE' ? (
-            <Link href="/vacations/request">
-              <Button>Request Vacation</Button>
+            <Link href="/vacations/request" className={buttonStyles()}>
+              Request Vacation
             </Link>
           ) : null}
         </div>
 
         <div className="grid gap-4">
+          {vacations.length === 0 ? (
+            <Card>
+              <p className="text-sm text-muted-foreground">
+                {user.role === 'EMPLOYEE'
+                  ? 'You have not requested any time off yet.'
+                  : 'No vacation requests have been submitted yet.'}
+              </p>
+            </Card>
+          ) : null}
           {vacations.map((request) => (
             <Card key={request.id} className="space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium">
-                  {new Date(request.startDate).toLocaleDateString()} -{' '}
-                  {new Date(request.endDate).toLocaleDateString()}
+                  {formatDateRange(request.startDate, request.endDate)}
                 </p>
                 <StatusBadge status={request.status} />
               </div>

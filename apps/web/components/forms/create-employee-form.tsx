@@ -4,6 +4,7 @@ import { useFormState, useFormStatus } from 'react-dom';
 import { createEmployeeAction } from '@/app/actions';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import { useResetOnSuccess } from './use-reset-on-success';
 
 const initialState = { success: false, error: null as string | null };
 
@@ -18,9 +19,10 @@ function SubmitButton() {
 
 export function CreateEmployeeForm() {
   const [state, formAction] = useFormState(createEmployeeAction, initialState);
+  const formRef = useResetOnSuccess(state);
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form ref={formRef} action={formAction} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <label className="text-sm font-medium" htmlFor="firstName">

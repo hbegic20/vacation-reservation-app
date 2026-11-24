@@ -6,6 +6,15 @@ import { AuthUser } from '@vacation/shared';
 
 export const getToken = cache(() => cookies().get('access_token')?.value ?? null);
 
+export function requireToken(): string {
+  const token = getToken();
+  if (!token) {
+    redirect('/login');
+  }
+
+  return token;
+}
+
 export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
   const token = getToken();
   if (!token) {

@@ -14,15 +14,34 @@ import {
   VacationCalendarDay,
   VacationRequest
 } from '@vacation/shared';
+import { redirect } from 'next/navigation';
 import { API_URL } from './config';
 
-async function parseJson<T>(response: Response): Promise<T> {
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    message: string
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(errorText || 'Request failed');
+    throw new ApiError(response.status, errorText || 'Request failed');
   }
 
   return response.json() as Promise<T>;
+}
+
+async function parseJson<T>(response: Response): Promise<T> {
+  if (response.status === 401) {
+    redirect('/login');
+  }
+
+  return parseResponse<T>(response);
 }
 
 export async function loginRequest(email: string, password: string) {
@@ -33,7 +52,7 @@ export async function loginRequest(email: string, password: string) {
     cache: 'no-store'
   });
 
-  return parseJson<LoginResponse>(response);
+  return parseResponse<LoginResponse>(response);
 }
 
 export async function fetchSummary(token: string) {

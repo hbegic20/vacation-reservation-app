@@ -10,13 +10,14 @@ import {
   fetchApprovedVacations,
   fetchSummary
 } from '@/lib/api';
-import { getToken, requireUser } from '@/lib/auth';
+import { requireToken, requireUser } from '@/lib/auth';
 import { AdminSummaryResponse, EmployeeSummaryResponse } from '@vacation/shared';
+import { formatDateRange } from '@/lib/dates';
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const token = getToken();
-  const summary = await fetchSummary(token!);
+  const token = requireToken();
+  const summary = await fetchSummary(token);
 
   return (
     <div>
@@ -27,7 +28,7 @@ export default async function DashboardPage() {
         </AnimatedReveal>
 
         {user.role === 'ADMIN' ? (
-          <AdminDashboard summary={summary as AdminSummaryResponse} token={token!} />
+          <AdminDashboard summary={summary as AdminSummaryResponse} token={token} />
         ) : (
           <EmployeeDashboard summary={summary as EmployeeSummaryResponse} />
         )}
@@ -88,8 +89,7 @@ function EmployeeDashboard({ summary }: { summary: EmployeeSummaryResponse }) {
             summary.upcomingVacations.map((vacation) => (
               <div key={vacation.id} className="flex items-center justify-between rounded-xl bg-muted/60 p-3">
                 <p className="text-sm">
-                  {new Date(vacation.startDate).toLocaleDateString()} -{' '}
-                  {new Date(vacation.endDate).toLocaleDateString()}
+                  {formatDateRange(vacation.startDate, vacation.endDate)}
                 </p>
                 <StatusBadge status={vacation.status} />
               </div>
@@ -101,11 +101,13 @@ function EmployeeDashboard({ summary }: { summary: EmployeeSummaryResponse }) {
       <Card>
         <h2 className="mb-3 text-lg font-semibold">Recent requests</h2>
         <div className="space-y-3">
+          {summary.requestHistory.length === 0 ? (
+            <p className="text-sm text-muted-foreground">You have not made any requests yet.</p>
+          ) : null}
           {summary.requestHistory.map((request) => (
             <div key={request.id} className="flex items-center justify-between rounded-xl bg-muted/60 p-3">
               <p className="text-sm">
-                {new Date(request.startDate).toLocaleDateString()} -{' '}
-                {new Date(request.endDate).toLocaleDateString()}
+                {formatDateRange(request.startDate, request.endDate)}
               </p>
               <StatusBadge status={request.status} />
             </div>

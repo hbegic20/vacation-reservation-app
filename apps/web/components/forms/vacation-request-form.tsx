@@ -5,6 +5,7 @@ import { createVacationAction } from '@/app/actions';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
+import { useResetOnSuccess } from './use-reset-on-success';
 
 const initialState = { success: false, error: null as string | null };
 
@@ -19,9 +20,10 @@ function SubmitButton() {
 
 export function VacationRequestForm() {
   const [state, formAction] = useFormState(createVacationAction, initialState);
+  const formRef = useResetOnSuccess(state);
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form ref={formRef} action={formAction} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <label htmlFor="startDate" className="text-sm font-medium">

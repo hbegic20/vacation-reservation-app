@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { Button } from '../ui/button';
 import { ModerateRequestForm } from './moderate-request-form';
@@ -14,6 +14,7 @@ interface ReviewRequestModalProps {
 export function ReviewRequestModal({ requestId, title, subtitle }: ReviewRequestModalProps) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
 
   useEffect(() => {
     if (!open || !panelRef.current) {
@@ -48,7 +49,7 @@ export function ReviewRequestModal({ requestId, title, subtitle }: ReviewRequest
                 Close
               </Button>
             </div>
-            <ModerateRequestForm requestId={requestId} />
+            <ModerateRequestForm requestId={requestId} onDecided={close} />
           </div>
         </div>
       ) : null}

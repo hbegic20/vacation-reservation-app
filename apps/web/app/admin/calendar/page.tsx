@@ -2,9 +2,9 @@ import Link from 'next/link';
 import { TopNav } from '@/components/layout/top-nav';
 import { YearVacationCalendar } from '@/components/calendar/year-vacation-calendar';
 import { CreateSickLeaveForm } from '@/components/forms/create-sick-leave-form';
-import { Button } from '@/components/ui/button';
+import { buttonStyles } from '@/components/ui/button';
 import { fetchEmployees, fetchVacationCalendar } from '@/lib/api';
-import { getToken, requireAdmin } from '@/lib/auth';
+import { requireAdmin, requireToken } from '@/lib/auth';
 
 interface AdminCalendarPageProps {
   searchParams: {
@@ -14,7 +14,7 @@ interface AdminCalendarPageProps {
 
 export default async function AdminCalendarPage({ searchParams }: AdminCalendarPageProps) {
   const user = await requireAdmin();
-  const token = getToken();
+  const token = requireToken();
   const currentYear = new Date().getFullYear();
   const requestedYear = Number(searchParams.year || currentYear);
   const year =
@@ -22,8 +22,8 @@ export default async function AdminCalendarPage({ searchParams }: AdminCalendarP
       ? requestedYear
       : currentYear;
   const [data, employees] = await Promise.all([
-    fetchVacationCalendar(token!, year),
-    fetchEmployees(token!)
+    fetchVacationCalendar(token, year),
+    fetchEmployees(token)
   ]);
 
   return (
@@ -33,11 +33,11 @@ export default async function AdminCalendarPage({ searchParams }: AdminCalendarP
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl font-bold">Company Calendar ({year})</h1>
           <div className="flex gap-2">
-            <Link href={`/admin/calendar?year=${year - 1}`}>
-              <Button variant="secondary">Previous Year</Button>
+            <Link href={`/admin/calendar?year=${year - 1}`} className={buttonStyles('secondary')}>
+              Previous Year
             </Link>
-            <Link href={`/admin/calendar?year=${year + 1}`}>
-              <Button variant="secondary">Next Year</Button>
+            <Link href={`/admin/calendar?year=${year + 1}`} className={buttonStyles('secondary')}>
+              Next Year
             </Link>
           </div>
         </div>

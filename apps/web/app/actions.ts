@@ -3,7 +3,9 @@
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { requireToken } from '@/lib/auth';
 import {
+  ApiError,
   createAdmin,
   createEmployee,
   createSickLeave,
@@ -15,6 +17,18 @@ import {
   updateEmployee,
   updateVacationStatus
 } from '@/lib/api';
+
+function failureState(error: unknown, message: string) {
+  if (!(error instanceof ApiError)) {
+    throw error;
+  }
+
+  return { success: false, error: message };
+}
+
+function parseModerationAction(value: FormDataEntryValue | null): 'approve' | 'reject' | null {
+  return value === 'approve' || value === 'reject' ? value : null;
+}
 
 export async function loginAction(_: unknown, formData: FormData) {
   const email = String(formData.get('email') || '');
@@ -29,7 +43,11 @@ export async function loginAction(_: unknown, formData: FormData) {
       sameSite: 'lax',
       path: '/'
     });
-  } catch {
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      throw error;
+    }
+
     return {
       error: 'Invalid credentials'
     };
@@ -44,10 +62,7 @@ export async function logoutAction() {
 }
 
 export async function createVacationAction(_: unknown, formData: FormData) {
-  const token = cookies().get('access_token')?.value;
-  if (!token) {
-    redirect('/login');
-  }
+  const token = requireToken();
 
   try {
     await createVacationRequest(token, {
@@ -59,23 +74,21 @@ export async function createVacationAction(_: unknown, formData: FormData) {
     revalidatePath('/vacations');
     revalidatePath('/dashboard');
     return { success: true, error: null };
-  } catch {
-    return {
-      success: false,
-      error: 'Could not submit request. Check dates and remaining days.'
-    };
+  } catch (error) {
+    return failureState(error, 'Could not submit request. Check dates and remaining days.');
   }
 }
 
 export async function moderateVacationAction(_: unknown, formData: FormData) {
-  const token = cookies().get('access_token')?.value;
-  if (!token) {
-    redirect('/login');
-  }
+  const token = requireToken();
 
   const requestId = String(formData.get('requestId'));
-  const action = String(formData.get('action')) as 'approve' | 'reject';
+  const action = parseModerationAction(formData.get('action'));
   const adminComment = String(formData.get('adminComment') || '');
+
+  if (!action) {
+    return { success: false, error: 'Choose approve or reject.' };
+  }
 
   try {
     await updateVacationStatus(token, requestId, action, { adminComment });
@@ -83,19 +96,13 @@ export async function moderateVacationAction(_: unknown, formData: FormData) {
     revalidatePath('/dashboard');
     revalidatePath('/vacations');
     return { success: true, error: null };
-  } catch {
-    return {
-      success: false,
-      error: 'Unable to update request status'
-    };
+  } catch (error) {
+    return failureState(error, 'Unable to update request status');
   }
 }
 
 export async function createEmployeeAction(_: unknown, formData: FormData) {
-  const token = cookies().get('access_token')?.value;
-  if (!token) {
-    redirect('/login');
-  }
+  const token = requireToken();
 
   const email = String(formData.get('email') || '');
   const firstName = String(formData.get('firstName') || '');
@@ -117,16 +124,13 @@ export async function createEmployeeAction(_: unknown, formData: FormData) {
     revalidatePath('/admin/employees');
     revalidatePath('/admin/employees/new');
     return { success: true, error: null };
-  } catch {
-    return { success: false, error: 'Could not create employee. Check the form values.' };
+  } catch (error) {
+    return failureState(error, 'Could not create employee. Check the form values.');
   }
 }
 
 export async function updateEmployeeAction(_: unknown, formData: FormData) {
-  const token = cookies().get('access_token')?.value;
-  if (!token) {
-    redirect('/login');
-  }
+  const token = requireToken();
 
   const employeeId = String(formData.get('employeeId') || '');
   const firstName = String(formData.get('firstName') || '');
@@ -146,16 +150,13 @@ export async function updateEmployeeAction(_: unknown, formData: FormData) {
     revalidatePath(`/admin/employees/${employeeId}/edit`);
     revalidatePath('/admin/employees');
     return { success: true, error: null };
-  } catch {
-    return { success: false, error: 'Unable to update employee.' };
+  } catch (error) {
+    return failureState(error, 'Unable to update employee.');
   }
 }
 
 export async function resetEmployeePasswordAction(_: unknown, formData: FormData) {
-  const token = cookies().get('access_token')?.value;
-  if (!token) {
-    redirect('/login');
-  }
+  const token = requireToken();
 
   const employeeId = String(formData.get('employeeId') || '');
   const newPassword = String(formData.get('newPassword') || '');
@@ -164,16 +165,13 @@ export async function resetEmployeePasswordAction(_: unknown, formData: FormData
     await resetEmployeePassword(token, employeeId, { newPassword });
     revalidatePath(`/admin/employees/${employeeId}/edit`);
     return { success: true, error: null };
-  } catch {
-    return { success: false, error: 'Unable to reset password.' };
+  } catch (error) {
+    return failureState(error, 'Unable to reset password.');
   }
 }
 
 export async function createAdminAction(_: unknown, formData: FormData) {
-  const token = cookies().get('access_token')?.value;
-  if (!token) {
-    redirect('/login');
-  }
+  const token = requireToken();
 
   const email = String(formData.get('email') || '');
   const firstName = String(formData.get('firstName') || '');
@@ -191,16 +189,13 @@ export async function createAdminAction(_: unknown, formData: FormData) {
     });
     revalidatePath('/admin/admins');
     return { success: true, error: null };
-  } catch {
-    return { success: false, error: 'Unable to create admin.' };
+  } catch (error) {
+    return failureState(error, 'Unable to create admin.');
   }
 }
 
 export async function createSickLeaveAction(_: unknown, formData: FormData) {
-  const token = cookies().get('access_token')?.value;
-  if (!token) {
-    redirect('/login');
-  }
+  const token = requireToken();
 
   const userId = String(formData.get('userId') || '');
   const startDate = String(formData.get('startDate') || '');
@@ -220,32 +215,28 @@ export async function createSickLeaveAction(_: unknown, formData: FormData) {
     revalidatePath('/admin/requests');
     revalidatePath('/vacations');
     return { success: true, error: null };
-  } catch {
-    return { success: false, error: 'Unable to create sick leave entry.' };
+  } catch (error) {
+    return failureState(error, 'Unable to create sick leave entry.');
   }
 }
 
 export async function markNotificationReadAction(formData: FormData) {
-  const token = cookies().get('access_token')?.value;
-  if (!token) {
-    redirect('/login');
-  }
+  const token = requireToken();
 
   const notificationId = String(formData.get('notificationId') || '');
 
   try {
     await markNotificationRead(token, notificationId);
     revalidatePath('/dashboard');
-  } catch {
-    return;
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      throw error;
+    }
   }
 }
 
 export async function markAllNotificationsReadAction() {
-  const token = cookies().get('access_token')?.value;
-  if (!token) {
-    redirect('/login');
-  }
+  const token = requireToken();
 
   await markAllNotificationsRead(token);
   revalidatePath('/dashboard');
