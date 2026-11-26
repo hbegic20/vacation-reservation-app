@@ -31,6 +31,7 @@ apps/api/
     vacations/         requests, approvals, cancellation, sick leave, calendar, summary, team absences,
                        bridge-day suggestions (bridge-days.ts), leave reminders (RemindersService)
     holidays/          public holidays and holiday-aware working-day counts
+    documents/         document uploads (bytes in Postgres), file type detection, publishing
     notifications/     in-app notifications for any user, MailerService (SMTP/Resend), Slack, daily digest
     common/            @Roles decorator, RolesGuard, @CurrentUser
     prisma/            PrismaService
@@ -85,6 +86,8 @@ The developer often has `npm run dev` running already. Check ports 3000 and 4000
 - A request's cover (`coverUserId`) must be an active employee in the requester's department and not the requester. The cover is notified on approval, not on submission.
 - `RemindersService` runs hourly and claims a reminder by setting `reminderSentAt` before notifying, so restarts never send twice. Endpoint tests stub its `onModuleInit` like the digest's.
 - Bridge-day suggestions are a pure function in `bridge-days.ts`; change its rules there and cover them in `bridge-days.spec.ts`.
+- Documents: detect the type from the file's bytes (`file-types.ts`), never from the name or the client's MIME type, and keep the 10 MB limit in sync between the API (`maxDocumentBytes`), the server action and `bodySizeLimit` in `next.config.mjs`. Never select `content` in list queries. Employees may only read published documents; return 404, not 403, for drafts.
+- The web app serves document files through `app/documents/[id]/file/route.ts`, which adds the user's token; never link the browser to the API directly.
 - When you add or change an endpoint, update `packages/shared` types and the README endpoint list.
 
 ## Frontend conventions

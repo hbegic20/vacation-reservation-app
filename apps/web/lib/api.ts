@@ -1,4 +1,5 @@
 import {
+  DocumentItem,
   BridgeSuggestion,
   PersonSummary,
   ChangePasswordPayload,
@@ -348,4 +349,60 @@ export async function fetchTeamMembers(token: string) {
   });
 
   return parseJson<PersonSummary[]>(response);
+}
+
+export async function fetchDocuments(token: string) {
+  const response = await fetch(`${API_URL}/documents`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store'
+  });
+
+  return parseJson<DocumentItem[]>(response);
+}
+
+export async function uploadDocument(token: string, upload: { title: string; description: string; file: File }) {
+  const body = new FormData();
+  body.set('title', upload.title);
+  if (upload.description) {
+    body.set('description', upload.description);
+  }
+  body.set('file', upload.file, upload.file.name);
+
+  const response = await fetch(`${API_URL}/documents`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body
+  });
+
+  return parseJson<DocumentItem>(response);
+}
+
+export async function updateDocument(token: string, documentId: string, changes: { isPublished: boolean }) {
+  const response = await fetch(`${API_URL}/documents/${documentId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(changes)
+  });
+
+  return parseJson<DocumentItem>(response);
+}
+
+export async function deleteDocument(token: string, documentId: string) {
+  const response = await fetch(`${API_URL}/documents/${documentId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  return parseJson<{ success: boolean }>(response);
+}
+
+export function fetchDocumentFile(token: string, documentId: string, download: boolean) {
+  const query = download ? '?download=1' : '';
+  return fetch(`${API_URL}/documents/${encodeURIComponent(documentId)}/file${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store'
+  });
 }

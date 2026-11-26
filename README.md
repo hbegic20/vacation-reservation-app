@@ -33,6 +33,7 @@ Production-oriented monorepo for company leave management with a split architect
 - Bridge-day suggestions: "Take 1 day, get 4 days off" around public holidays, one click pre-fills the request form
 - Optional cover colleague on requests; they're notified when the request is approved
 - Reminder the day before approved vacation starts (in-app and email, from 07:00 UTC)
+- Document library: admins upload PDFs, images, Word and Excel files (stored in Postgres), preview them, and publish them to an employee feed; employees are notified on first publication
 - Temporary passwords: users must choose their own password on first sign-in or after a reset
 
 ## Key Frontend Routes
@@ -51,6 +52,7 @@ Production-oriented monorepo for company leave management with a split architect
 - `/account/password`
 - `/notifications`
 - `/team`
+- `/documents` and `/admin/documents`
 - Light/dark theme + subtle UI animations
 
 ## Project Structure
@@ -97,6 +99,11 @@ All routes are prefixed with `/api` by Nest.
 - `PATCH /api/vacations/:id/reject`
 - `GET /api/vacations/calendar?year=2026`
 - `POST /api/vacations/sick`
+- `GET /api/documents` (admins: all; employees: published only)
+- `POST /api/documents` (admin, multipart `file` + `title` + optional `description`, max 10 MB)
+- `GET /api/documents/:id/file?download=1` (employees only published files)
+- `PATCH /api/documents/:id` (admin: title, description, `isPublished`)
+- `DELETE /api/documents/:id` (admin)
 - `GET /api/holidays?year=2026`
 - `POST /api/holidays` (admin only)
 - `DELETE /api/holidays/:id` (admin only)

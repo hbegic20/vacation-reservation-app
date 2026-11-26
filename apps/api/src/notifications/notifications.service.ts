@@ -99,6 +99,20 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  async notifyAllEmployees(payload: NotificationPayload) {
+    const employees = await this.prisma.user.findMany({
+      where: { role: UserRole.EMPLOYEE, isActive: true },
+      select: { id: true },
+    });
+    if (employees.length === 0) {
+      return;
+    }
+
+    await this.prisma.notification.createMany({
+      data: employees.map((employee) => ({ userId: employee.id, ...payload })),
+    });
+  }
+
   listForUser(userId: string, unreadOnly = false) {
     return this.prisma.notification.findMany({
       where: {

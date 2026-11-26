@@ -85,7 +85,7 @@ export function MobileTabBar({ items }: { items: NavItem[] }) {
             )}
           >
             <Icon name={item.icon} size={22} />
-            {item.label}
+            {item.shortLabel ?? item.label}
             <WaitingBadge count={item.waitingCount} className="absolute left-1/2 top-1.5 ml-2" />
           </Link>
         );

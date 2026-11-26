@@ -20,6 +20,7 @@ interface PrismaShape {
   vacationRequest: ModelMock;
   notification: ModelMock;
   publicHoliday: ModelMock;
+  document: ModelMock;
   $transaction: jest.Mock;
 }
 
@@ -31,6 +32,7 @@ export function createPrismaMock() {
     vacationRequest: modelMock(),
     notification: modelMock(),
     publicHoliday: modelMock(),
+    document: modelMock(),
     $transaction: jest.fn(),
   };
   return resetPrismaMock(prisma);
@@ -44,6 +46,7 @@ export function resetPrismaMock<T extends PrismaShape>(prisma: T): T {
     prisma.vacationRequest,
     prisma.notification,
     prisma.publicHoliday,
+    prisma.document,
   ]) {
     Object.values(model).forEach((method) => method.mockReset());
   }

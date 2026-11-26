@@ -166,6 +166,37 @@ describe("NotificationsService", () => {
     });
   });
 
+  describe("notifyAllEmployees", () => {
+    it("stores one in-app notification per active employee, without email", async () => {
+      prisma.user.findMany.mockResolvedValue([
+        { id: "employee-1" },
+        { id: "employee-2" },
+      ]);
+
+      await createService().notifyAllEmployees(payload);
+
+      expect(prisma.user.findMany.mock.calls[0][0].where).toEqual({
+        role: "EMPLOYEE",
+        isActive: true,
+      });
+      expect(prisma.notification.createMany).toHaveBeenCalledWith({
+        data: [
+          { userId: "employee-1", ...payload },
+          { userId: "employee-2", ...payload },
+        ],
+      });
+      expect(mailer.send).not.toHaveBeenCalled();
+    });
+
+    it("does nothing when there are no active employees", async () => {
+      prisma.user.findMany.mockResolvedValue([]);
+
+      await createService().notifyAllEmployees(payload);
+
+      expect(prisma.notification.createMany).not.toHaveBeenCalled();
+    });
+  });
+
   it("lists only the user's unread notifications when asked", async () => {
     prisma.notification.findMany.mockResolvedValue([]);
 

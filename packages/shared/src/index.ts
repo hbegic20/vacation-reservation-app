@@ -9,6 +9,7 @@ export type NotificationType =
   | 'VACATION_CANCELLED'
   | 'COVER_ASSIGNED'
   | 'LEAVE_REMINDER'
+  | 'DOCUMENT_PUBLISHED'
   | 'SICK_LEAVE_ADDED'
   | 'DAILY_DIGEST';
 
@@ -215,4 +216,18 @@ export interface BridgeSuggestion {
   leaveDays: number;
   daysOff: number;
   holidays: string[];
+}
+
+export interface DocumentItem {
+  id: string;
+  title: string;
+  description: string | null;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  isPublished: boolean;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  uploadedBy: PersonSummary | null;
 }

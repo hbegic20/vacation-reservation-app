@@ -10,6 +10,7 @@ import {
   changePassword,
   createAdmin,
   createHoliday,
+  deleteDocument,
   deleteHoliday,
   createEmployee,
   createSickLeave,
@@ -18,7 +19,9 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   resetEmployeePassword,
+  updateDocument,
   updateEmployee,
+  uploadDocument,
   updateVacationStatus
 } from '@/lib/api';
 
@@ -317,4 +320,60 @@ export async function changePasswordAction(_: unknown, formData: FormData) {
 
   revalidatePath('/', 'layout');
   redirect('/dashboard');
+}
+
+const maxDocumentBytes = 10 * 1024 * 1024;
+
+function revalidateDocuments() {
+  revalidatePath('/admin/documents');
+  revalidatePath('/documents');
+}
+
+export async function uploadDocumentAction(_: unknown, formData: FormData) {
+  const token = requireToken();
+  const title = String(formData.get('title') || '').trim();
+  const description = String(formData.get('description') || '').trim();
+  const file = formData.get('file');
+
+  if (!(file instanceof File) || file.size === 0) {
+    return { success: false, error: 'Choose a file to upload.' };
+  }
+  if (file.size > maxDocumentBytes) {
+    return { success: false, error: 'Files can be at most 10 MB.' };
+  }
+
+  try {
+    await uploadDocument(token, { title, description, file });
+    revalidateDocuments();
+    return { success: true, error: null };
+  } catch (error) {
+    return failureWithApiMessage(error, 'Unable to upload this document.');
+  }
+}
+
+export async function setDocumentPublishedAction(_: unknown, formData: FormData) {
+  const token = requireToken();
+  const documentId = String(formData.get('documentId') || '');
+  const isPublished = formData.get('isPublished') === 'true';
+
+  try {
+    await updateDocument(token, documentId, { isPublished });
+    revalidateDocuments();
+    return { success: true, error: null };
+  } catch (error) {
+    return failureWithApiMessage(error, 'Unable to update this document.');
+  }
+}
+
+export async function deleteDocumentAction(_: unknown, formData: FormData) {
+  const token = requireToken();
+  const documentId = String(formData.get('documentId') || '');
+
+  try {
+    await deleteDocument(token, documentId);
+    revalidateDocuments();
+    return { success: true, error: null };
+  } catch (error) {
+    return failureWithApiMessage(error, 'Unable to delete this document.');
+  }
 }
