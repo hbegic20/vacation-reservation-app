@@ -1,7 +1,11 @@
 import { VacationRequest } from '@vacation/shared';
 
+export function fullName(person: { firstName: string; lastName: string }): string {
+  return `${person.firstName} ${person.lastName}`;
+}
+
 export function requesterName(request: VacationRequest): string {
-  return request.user ? `${request.user.firstName} ${request.user.lastName}` : 'Unknown employee';
+  return request.user ? fullName(request.user) : 'Unknown employee';
 }
 
 export function plural(count: number, singular: string, pluralForm = `${singular}s`): string {

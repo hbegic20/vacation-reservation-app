@@ -7,9 +7,16 @@ import { useFormState, useFormStatus } from 'react-dom';
 import { createVacationAction } from '@/app/actions';
 import { overlapsRange } from '@/lib/absences';
 import { addDays } from '@/lib/calendar';
-import { countWorkingDays, formatDateRange, formatWeekdayDate, localDateKey, toDateKey } from '@/lib/dates';
+import {
+  countWorkingDays,
+  formatDateRange,
+  formatWeekdayDate,
+  isWorkingDayKey,
+  localDateKey,
+  toDateKey
+} from '@/lib/dates';
 import { cn } from '@/lib/utils';
-import { plural } from '@/lib/people';
+import { fullName, plural } from '@/lib/people';
 import { Button, buttonStyles } from '../ui/button';
 import { Field } from '../ui/field';
 import { FormMessage } from '../ui/form-message';
@@ -115,11 +122,6 @@ function SelectedDay({ label, dateKey }: { label: string; dateKey: string }) {
   );
 }
 
-function isWeekday(dateKey: string): boolean {
-  const weekday = new Date(`${dateKey}T00:00:00Z`).getUTCDay();
-  return weekday !== 0 && weekday !== 6;
-}
-
 export function VacationRequestForm({
   availableDays,
   holidays,
@@ -148,7 +150,7 @@ export function VacationRequestForm({
   const holidaysInRange = hasRange
     ? holidays.filter((holiday) => {
         const key = toDateKey(holiday.date);
-        return key >= range.startDate && key <= range.endDate && isWeekday(key);
+        return key >= range.startDate && key <= range.endDate && isWorkingDayKey(key);
       })
     : [];
   const error = rangeError(range, workingDays, availableDays, existingRequests);
@@ -216,7 +218,7 @@ export function VacationRequestForm({
               <option value="">No cover needed</option>
               {teamMembers.map((member) => (
                 <option key={member.id} value={member.id}>
-                  {member.firstName} {member.lastName}
+                  {fullName(member)}
                 </option>
               ))}
             </Select>

@@ -1,3 +1,5 @@
+import { JwtService } from "@nestjs/jwt";
+import { UserRole } from "@prisma/client";
 import { hash } from "bcrypt";
 import request from "supertest";
 import { buildUser } from "./fixtures";
@@ -149,6 +151,32 @@ describe("Auth endpoints", () => {
 
     it("returns 401 without a token", async () => {
       await request(testApp.app.getHttpServer()).get("/api/me").expect(401);
+    });
+
+    it("returns 401 for a valid token of a user who is no longer active", async () => {
+      const token = testApp.app.get(JwtService).sign({
+        sub: "deactivated-1",
+        email: "former@company.com",
+        role: UserRole.EMPLOYEE,
+      });
+
+      await request(testApp.app.getHttpServer())
+        .get("/api/me")
+        .set(bearer(token))
+        .expect(401);
+    });
+
+    it("uses the stored role instead of the one in the token", async () => {
+      const token = testApp.app.get(JwtService).sign({
+        sub: "employee-1",
+        email: "john.employee@company.com",
+        role: UserRole.ADMIN,
+      });
+
+      await request(testApp.app.getHttpServer())
+        .get("/api/vacations/calendar?year=2026")
+        .set(bearer(token))
+        .expect(403);
     });
 
     it("returns 401 for a tampered token", async () => {

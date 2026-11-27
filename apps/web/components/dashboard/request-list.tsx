@@ -4,7 +4,7 @@ import { StatusBadge } from '@/components/ui/badge';
 import { canCancel, todayKey } from '@/lib/absences';
 import { formatDateRange } from '@/lib/dates';
 import { absenceTypeLabels } from '@/lib/labels';
-import { plural } from '@/lib/people';
+import { fullName, plural } from '@/lib/people';
 
 export function RequestList({ requests }: { requests: VacationRequest[] }) {
   const today = todayKey();
@@ -24,7 +24,7 @@ export function RequestList({ requests }: { requests: VacationRequest[] }) {
             </p>
             {request.coverUser ? (
               <p className="mt-1 text-sm text-muted-foreground">
-                Cover: {request.coverUser.firstName} {request.coverUser.lastName}
+                Cover: {fullName(request.coverUser)}
               </p>
             ) : null}
             {request.adminComment ? (

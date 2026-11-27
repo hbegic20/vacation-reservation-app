@@ -8,16 +8,20 @@ import {
 import {
   AbsenceType,
   NotificationType,
+  Prisma,
   UserRole,
   VacationStatus,
 } from "@prisma/client";
 import { RequestUser } from "../auth/types";
 import {
   addDays,
+  daysBetweenInclusive,
+  eachDateKey,
   formatDateRange,
   startOfUtcDay,
   toDateKey,
 } from "../common/dates";
+import { fullName } from "../common/names";
 import { suggestBridgeDays } from "./bridge-days";
 import { HolidaysService } from "../holidays/holidays.service";
 import { NotificationsService } from "../notifications/notifications.service";
@@ -28,6 +32,8 @@ import { CreateVacationRequestDto } from "./dto/create-vacation-request.dto";
 const maxTeamRangeInDays = 62;
 const suggestionLimit = 3;
 const suggestionHorizonInDays = 365;
+
+const activeStatuses = [VacationStatus.PENDING, VacationStatus.APPROVED];
 
 const personSummary = {
   select: { id: true, firstName: true, lastName: true },
@@ -45,6 +51,18 @@ const requestPeople = {
   },
   coverUser: personSummary,
 } as const;
+
+function colleaguesOf(person: {
+  id: string;
+  department: string;
+}): Prisma.UserWhereInput {
+  return {
+    role: UserRole.EMPLOYEE,
+    isActive: true,
+    department: person.department,
+    NOT: { id: person.id },
+  };
+}
 
 @Injectable()
 export class VacationsService {
@@ -69,6 +87,41 @@ export class VacationsService {
       message: `Your time off ${range} ${outcome}.${comment}`,
       metadata: { requestId: request.id },
     });
+  }
+
+  private async settleRequest(
+    transaction: Prisma.TransactionClient,
+    request: { id: string; status: VacationStatus },
+    changes: Prisma.VacationRequestUpdateManyMutationInput,
+  ) {
+    const { count } = await transaction.vacationRequest.updateMany({
+      where: { id: request.id, status: request.status },
+      data: changes,
+    });
+    if (count === 0) {
+      throw new ConflictException(
+        "This request was just updated by someone else. Refresh and try again.",
+      );
+    }
+  }
+
+  private async chargeAllowance(
+    transaction: Prisma.TransactionClient,
+    employee: { id: string; vacationDaysTotal: number },
+    workingDays: number,
+  ) {
+    const { count } = await transaction.user.updateMany({
+      where: {
+        id: employee.id,
+        vacationDaysUsed: { lte: employee.vacationDaysTotal - workingDays },
+      },
+      data: { vacationDaysUsed: { increment: workingDays } },
+    });
+    if (count === 0) {
+      throw new BadRequestException(
+        "Employee does not have enough vacation days",
+      );
+    }
   }
 
   private async ensureNoOverlap(range: {
@@ -111,14 +164,12 @@ export class VacationsService {
     requester: { id: string; department: string | null },
     coverUserId: string,
   ): Promise<string> {
-    const cover = requester.department
+    const department = requester.department;
+    const cover = department
       ? await this.prisma.user.findFirst({
           where: {
             id: coverUserId,
-            role: UserRole.EMPLOYEE,
-            isActive: true,
-            department: requester.department,
-            NOT: { id: requester.id },
+            ...colleaguesOf({ id: requester.id, department }),
           },
           select: { id: true },
         })
@@ -141,7 +192,7 @@ export class VacationsService {
     if (!request.coverUserId) {
       return;
     }
-    const name = `${request.user.firstName} ${request.user.lastName}`;
+    const name = fullName(request.user);
     await this.notificationsService.notifyEmployee(request.coverUserId, {
       type: NotificationType.COVER_ASSIGNED,
       title: `You're covering for ${name}`,
@@ -150,23 +201,23 @@ export class VacationsService {
     });
   }
 
-  async listTeamMembers(user: RequestUser) {
+  private async departmentOf(userId: string) {
     const member = await this.prisma.user.findUnique({
-      where: { id: user.id },
+      where: { id: userId },
       select: { department: true },
     });
-    if (!member?.department) {
+    return member?.department ?? null;
+  }
+
+  async listTeamMembers(user: RequestUser) {
+    const department = await this.departmentOf(user.id);
+    if (!department) {
       return [];
     }
 
     return this.prisma.user.findMany({
-      where: {
-        role: UserRole.EMPLOYEE,
-        isActive: true,
-        department: member.department,
-        NOT: { id: user.id },
-      },
-      select: { id: true, firstName: true, lastName: true },
+      where: colleaguesOf({ id: user.id, department }),
+      select: personSummary.select,
       orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
     });
   }
@@ -191,7 +242,7 @@ export class VacationsService {
       this.prisma.vacationRequest.findMany({
         where: {
           userId: user.id,
-          status: { in: [VacationStatus.PENDING, VacationStatus.APPROVED] },
+          status: { in: activeStatuses },
           endDate: { gte: new Date(`${firstDay}T00:00:00.000Z`) },
         },
         select: { startDate: true, endDate: true },
@@ -201,16 +252,11 @@ export class VacationsService {
       throw new NotFoundException("Employee not found");
     }
 
-    const blockedDays = new Set<string>();
-    for (const request of booked) {
-      for (
-        let key = toDateKey(request.startDate);
-        key <= toDateKey(request.endDate);
-        key = addDays(key, 1)
-      ) {
-        blockedDays.add(key);
-      }
-    }
+    const blockedDays = new Set(
+      booked.flatMap((request) =>
+        eachDateKey(request.startDate, request.endDate),
+      ),
+    );
 
     return suggestBridgeDays({
       firstDay,
@@ -252,7 +298,7 @@ export class VacationsService {
       userId: user.id,
       startDate: dto.startDate,
       endDate: dto.endDate,
-      statuses: [VacationStatus.PENDING, VacationStatus.APPROVED],
+      statuses: activeStatuses,
     });
 
     const coverUserId = dto.coverUserId
@@ -276,7 +322,7 @@ export class VacationsService {
     await this.notificationsService.createAndDispatch({
       type: "VACATION_REQUEST_SUBMITTED",
       title: "New vacation request submitted",
-      message: `${request.user.firstName} ${request.user.lastName} requested vacation (${request.startDate.toISOString().slice(0, 10)} to ${request.endDate.toISOString().slice(0, 10)}).`,
+      message: `${fullName(request.user)} requested vacation (${formatDateRange(request.startDate, request.endDate)}).`,
       metadata: {
         requestId: request.id,
         userId: request.userId,
@@ -333,7 +379,7 @@ export class VacationsService {
     await this.notificationsService.createAndDispatch({
       type: "SICK_LEAVE_ADDED",
       title: "Sick leave added",
-      message: `${sickEntry.user.firstName} ${sickEntry.user.lastName} was marked sick (${sickEntry.startDate.toISOString().slice(0, 10)} to ${sickEntry.endDate.toISOString().slice(0, 10)}).`,
+      message: `${fullName(sickEntry.user)} was marked sick (${formatDateRange(sickEntry.startDate, sickEntry.endDate)}).`,
       metadata: {
         requestId: sickEntry.id,
         userId: sickEntry.userId,
@@ -397,58 +443,25 @@ export class VacationsService {
       excludeRequestId: request.id,
     });
 
-    if (request.absenceType === AbsenceType.SICK) {
-      const approvedSick = await this.prisma.vacationRequest.update({
-        where: { id: requestId },
-        data: {
-          status: VacationStatus.APPROVED,
-          adminComment: adminComment ?? null,
-        },
-      });
-
-      await this.notificationsService.createAndDispatch({
-        type: "VACATION_APPROVED",
-        title: "Request approved",
-        message: `${request.user.firstName} ${request.user.lastName}'s request was approved.`,
-        metadata: { requestId: approvedSick.id, userId: approvedSick.userId },
-      });
-
-      await this.notifyEmployeeOfOutcome(
-        approvedSick,
-        NotificationType.VACATION_APPROVED,
-        "Request approved",
-        "was approved",
-        approvedSick.adminComment,
-      );
-
-      return approvedSick;
-    }
-
-    const requestedDays = request.workingDays;
+    const isVacation = request.absenceType === AbsenceType.VACATION;
     const remainingDays =
       request.user.vacationDaysTotal - request.user.vacationDaysUsed;
-    if (requestedDays > remainingDays) {
+    if (isVacation && request.workingDays > remainingDays) {
       throw new BadRequestException(
         "Employee does not have enough vacation days",
       );
     }
 
-    const approvedVacation = await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: request.userId },
-        data: {
-          vacationDaysUsed: {
-            increment: requestedDays,
-          },
-        },
+    const approved = await this.prisma.$transaction(async (tx) => {
+      await this.settleRequest(tx, request, {
+        status: VacationStatus.APPROVED,
+        adminComment: adminComment ?? null,
       });
-
-      return tx.vacationRequest.update({
+      if (isVacation) {
+        await this.chargeAllowance(tx, request.user, request.workingDays);
+      }
+      return tx.vacationRequest.findUniqueOrThrow({
         where: { id: requestId },
-        data: {
-          status: VacationStatus.APPROVED,
-          adminComment: adminComment ?? null,
-        },
         include: requestPeople,
       });
     });
@@ -456,24 +469,23 @@ export class VacationsService {
     await this.notificationsService.createAndDispatch({
       type: "VACATION_APPROVED",
       title: "Request approved",
-      message: `${request.user.firstName} ${request.user.lastName}'s vacation was approved.`,
-      metadata: {
-        requestId: approvedVacation.id,
-        userId: approvedVacation.userId,
-      },
+      message: `${fullName(request.user)}'s ${isVacation ? "vacation" : "request"} was approved.`,
+      metadata: { requestId: approved.id, userId: approved.userId },
     });
 
-    await this.notifyCover(approvedVacation);
+    if (isVacation) {
+      await this.notifyCover(approved);
+    }
 
     await this.notifyEmployeeOfOutcome(
-      approvedVacation,
+      approved,
       NotificationType.VACATION_APPROVED,
-      "Vacation approved",
+      isVacation ? "Vacation approved" : "Request approved",
       "was approved",
-      approvedVacation.adminComment,
+      approved.adminComment,
     );
 
-    return approvedVacation;
+    return approved;
   }
 
   async reject(requestId: string, adminComment?: string) {
@@ -489,24 +501,21 @@ export class VacationsService {
       throw new BadRequestException("Only pending requests can be rejected");
     }
 
-    const rejected = await this.prisma.vacationRequest.update({
-      where: { id: requestId },
-      data: {
+    const rejected = await this.prisma.$transaction(async (tx) => {
+      await this.settleRequest(tx, request, {
         status: VacationStatus.REJECTED,
         adminComment: adminComment ?? null,
-      },
-      include: requestPeople,
-    });
-
-    const requestUser = await this.prisma.user.findUnique({
-      where: { id: rejected.userId },
-      select: { firstName: true, lastName: true },
+      });
+      return tx.vacationRequest.findUniqueOrThrow({
+        where: { id: requestId },
+        include: requestPeople,
+      });
     });
 
     await this.notificationsService.createAndDispatch({
       type: "VACATION_REJECTED",
       title: "Request rejected",
-      message: `${requestUser?.firstName ?? "Employee"} ${requestUser?.lastName ?? ""}'s request was rejected.`,
+      message: `${fullName(rejected.user)}'s request was rejected.`,
       metadata: { requestId: rejected.id, userId: rejected.userId },
     });
 
@@ -522,7 +531,7 @@ export class VacationsService {
   }
 
   async getSummary(user: RequestUser) {
-    if (user.role === "ADMIN") {
+    if (user.role === UserRole.ADMIN) {
       const [pendingApprovals, approvedRequests, employees] = await Promise.all(
         [
           this.prisma.vacationRequest.count({
@@ -551,23 +560,24 @@ export class VacationsService {
       throw new ForbiddenException("Employee not found");
     }
 
-    const upcomingVacations = await this.prisma.vacationRequest.findMany({
-      where: {
-        userId: user.id,
-        status: VacationStatus.APPROVED,
-        startDate: { gte: new Date() },
-      },
-      include: requestPeople,
-      orderBy: { startDate: "asc" },
-      take: 5,
-    });
-
-    const requestHistory = await this.prisma.vacationRequest.findMany({
-      where: { userId: user.id },
-      include: requestPeople,
-      orderBy: { createdAt: "desc" },
-      take: 10,
-    });
+    const [upcomingVacations, requestHistory] = await Promise.all([
+      this.prisma.vacationRequest.findMany({
+        where: {
+          userId: user.id,
+          status: VacationStatus.APPROVED,
+          startDate: { gte: new Date() },
+        },
+        include: requestPeople,
+        orderBy: { startDate: "asc" },
+        take: 5,
+      }),
+      this.prisma.vacationRequest.findMany({
+        where: { userId: user.id },
+        include: requestPeople,
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      }),
+    ]);
 
     return {
       remainingVacationDays:
@@ -602,23 +612,24 @@ export class VacationsService {
       request.absenceType === AbsenceType.VACATION;
 
     const cancelled = await this.prisma.$transaction(async (tx) => {
+      await this.settleRequest(tx, request, {
+        status: VacationStatus.CANCELLED,
+      });
       if (refundsAllowance) {
         await tx.user.update({
           where: { id: request.userId },
           data: { vacationDaysUsed: { decrement: request.workingDays } },
         });
       }
-
-      return tx.vacationRequest.update({
+      return tx.vacationRequest.findUniqueOrThrow({
         where: { id: requestId },
-        data: { status: VacationStatus.CANCELLED },
       });
     });
 
     await this.notificationsService.createAndDispatch({
       type: "VACATION_CANCELLED",
       title: "Request cancelled",
-      message: `${request.user.firstName} ${request.user.lastName} cancelled their ${request.status === VacationStatus.APPROVED ? "approved" : "pending"} request (${toDateKey(request.startDate)} to ${toDateKey(request.endDate)}).`,
+      message: `${fullName(request.user)} cancelled their ${request.status === VacationStatus.APPROVED ? "approved" : "pending"} request (${formatDateRange(request.startDate, request.endDate)}).`,
       metadata: { requestId: cancelled.id, userId: cancelled.userId },
     });
 
@@ -626,21 +637,15 @@ export class VacationsService {
   }
 
   async listTeamAbsences(user: RequestUser, from: Date, to: Date) {
-    const millisecondsPerDay = 86_400_000;
-    const spanInDays =
-      (startOfUtcDay(to).getTime() - startOfUtcDay(from).getTime()) /
-      millisecondsPerDay;
+    const spanInDays = daysBetweenInclusive(toDateKey(from), toDateKey(to)) - 1;
     if (spanInDays > maxTeamRangeInDays) {
       throw new BadRequestException(
         `The range can cover at most ${maxTeamRangeInDays} days`,
       );
     }
 
-    const member = await this.prisma.user.findUnique({
-      where: { id: user.id },
-      select: { department: true },
-    });
-    if (!member?.department) {
+    const department = await this.departmentOf(user.id);
+    if (!department) {
       return [];
     }
 
@@ -650,13 +655,13 @@ export class VacationsService {
         startDate: { lte: startOfUtcDay(to) },
         endDate: { gte: startOfUtcDay(from) },
         userId: { not: user.id },
-        user: { department: member.department, isActive: true },
+        user: { department, isActive: true },
       },
       select: {
         id: true,
         startDate: true,
         endDate: true,
-        user: { select: { id: true, firstName: true, lastName: true } },
+        user: personSummary,
       },
       orderBy: { startDate: "asc" },
     });
@@ -676,14 +681,13 @@ export class VacationsService {
       );
     }
 
-    const yearStart = new Date(Date.UTC(year, 0, 1, 0, 0, 0));
-    const yearEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59));
-
+    const firstDay = `${year}-01-01`;
+    const lastDay = `${year}-12-31`;
     const requests = await this.prisma.vacationRequest.findMany({
       where: {
-        startDate: { lte: yearEnd },
-        endDate: { gte: yearStart },
-        status: { not: VacationStatus.CANCELLED },
+        startDate: { lte: new Date(`${lastDay}T00:00:00.000Z`) },
+        endDate: { gte: new Date(`${firstDay}T00:00:00.000Z`) },
+        status: { in: activeStatuses },
       },
       select: {
         id: true,
@@ -694,91 +698,23 @@ export class VacationsService {
         workingDays: true,
         absenceType: true,
         status: true,
-        coverUser: personSummary,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            department: true,
-          },
-        },
+        ...requestPeople,
       },
       orderBy: [{ startDate: "asc" }],
     });
 
-    const daysMap = new Map<
-      string,
-      {
-        date: string;
-        requests: Array<{
-          id: string;
-          userId: string;
-          startDate: Date;
-          endDate: Date;
-          reason: string;
-          workingDays: number;
-          absenceType: AbsenceType;
-          status: VacationStatus;
-          coverUser: { id: string; firstName: string; lastName: string } | null;
-          user: {
-            id: string;
-            email: string;
-            firstName: string;
-            lastName: string;
-            department: string | null;
-          };
-        }>;
-      }
-    >();
-
+    const requestsByDay = new Map<string, typeof requests>();
     for (const request of requests) {
-      const start = new Date(
-        Date.UTC(
-          request.startDate.getUTCFullYear(),
-          request.startDate.getUTCMonth(),
-          request.startDate.getUTCDate(),
-        ),
-      );
-      const end = new Date(
-        Date.UTC(
-          request.endDate.getUTCFullYear(),
-          request.endDate.getUTCMonth(),
-          request.endDate.getUTCDate(),
-        ),
-      );
-
-      for (
-        let cursor = new Date(start);
-        cursor <= end;
-        cursor.setUTCDate(cursor.getUTCDate() + 1)
-      ) {
-        if (cursor < yearStart || cursor > yearEnd) {
-          continue;
+      for (const key of eachDateKey(request.startDate, request.endDate)) {
+        if (key >= firstDay && key <= lastDay) {
+          requestsByDay.set(key, [...(requestsByDay.get(key) ?? []), request]);
         }
-
-        const key = toDateKey(cursor);
-        const existing = daysMap.get(key);
-        const dayEntry = existing ?? { date: key, requests: [] };
-        dayEntry.requests.push({
-          id: request.id,
-          userId: request.userId,
-          startDate: request.startDate,
-          endDate: request.endDate,
-          reason: request.reason,
-          workingDays: request.workingDays,
-          absenceType: request.absenceType,
-          status: request.status,
-          coverUser: request.coverUser,
-          user: request.user,
-        });
-        daysMap.set(key, dayEntry);
       }
     }
 
-    return Array.from(daysMap.values()).sort((a, b) =>
-      a.date.localeCompare(b.date),
-    );
+    return Array.from(requestsByDay, ([date, dayRequests]) => ({
+      date,
+      requests: dayRequests,
+    })).sort((a, b) => a.date.localeCompare(b.date));
   }
 }

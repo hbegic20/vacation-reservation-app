@@ -4,6 +4,8 @@ import { Test } from "@nestjs/testing";
 import { UserRole } from "@prisma/client";
 import { AppModule } from "../src/app.module";
 import { configureApp } from "../src/app.setup";
+import { SessionService } from "../src/auth/session.service";
+import { RequestUser } from "../src/auth/types";
 import { NotificationsService } from "../src/notifications/notifications.service";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { RemindersService } from "../src/vacations/reminders.service";
@@ -16,17 +18,24 @@ export interface TestApp {
   adminToken: string;
 }
 
-export const employeeIdentity = {
+const employeeIdentity = {
   sub: "employee-1",
   email: "john.employee@company.com",
   role: UserRole.EMPLOYEE,
 };
 
-export const adminIdentity = {
+const adminIdentity = {
   sub: "admin-1",
   email: "admin@company.com",
   role: UserRole.ADMIN,
 };
+
+const sessionUsers = new Map<string, RequestUser>(
+  [employeeIdentity, adminIdentity].map(({ sub, email, role }) => [
+    sub,
+    { id: sub, email, role },
+  ]),
+);
 
 export async function createTestApp(): Promise<TestApp> {
   jest
@@ -40,6 +49,10 @@ export async function createTestApp(): Promise<TestApp> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(PrismaService)
     .useValue(prisma)
+    .overrideProvider(SessionService)
+    .useValue({
+      findActiveUser: async (id: string) => sessionUsers.get(id) ?? null,
+    })
     .compile();
 
   const app = configureApp(moduleRef.createNestApplication());

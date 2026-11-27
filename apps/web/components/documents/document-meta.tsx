@@ -1,9 +1,10 @@
 import { DocumentItem } from '@vacation/shared';
 import { formatDate } from '@/lib/dates';
 import { documentKindLabel, formatFileSize } from '@/lib/documents';
+import { fullName } from '@/lib/people';
 
 export function DocumentMeta({ document, showUploader }: { document: DocumentItem; showUploader: boolean }) {
-  const uploader = document.uploadedBy ? `${document.uploadedBy.firstName} ${document.uploadedBy.lastName}` : null;
+  const uploader = document.uploadedBy ? fullName(document.uploadedBy) : null;
 
   return (
     <p className="text-[13px] text-muted-foreground">

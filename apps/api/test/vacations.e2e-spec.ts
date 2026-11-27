@@ -292,7 +292,8 @@ describe("Vacation endpoints", () => {
         }),
         user: { firstName: "John", lastName: "Employee" },
       });
-      testApp.prisma.vacationRequest.update.mockResolvedValue(
+      testApp.prisma.vacationRequest.updateMany.mockResolvedValue({ count: 1 });
+      testApp.prisma.vacationRequest.findUniqueOrThrow.mockResolvedValue(
         buildRequest({ status: VacationStatus.CANCELLED }),
       );
     }
@@ -457,7 +458,14 @@ describe("Vacation endpoints", () => {
           ...buildRequest(),
           user: buildUser(),
         });
-        testApp.prisma.vacationRequest.update.mockResolvedValue(buildRequest());
+        testApp.prisma.vacationRequest.updateMany.mockResolvedValue({
+          count: 1,
+        });
+        testApp.prisma.user.updateMany.mockResolvedValue({ count: 1 });
+        testApp.prisma.vacationRequest.findUniqueOrThrow.mockResolvedValue({
+          ...buildRequest(),
+          user: buildUser(),
+        });
         testApp.prisma.user.findUnique.mockResolvedValue(buildUser());
 
         await http()
@@ -467,9 +475,25 @@ describe("Vacation endpoints", () => {
           .expect(200);
 
         expect(
-          testApp.prisma.vacationRequest.update.mock.calls[0][0].data
+          testApp.prisma.vacationRequest.updateMany.mock.calls[0][0].data
             .adminComment,
         ).toBe("Noted");
+      });
+
+      it("returns 409 when another admin decided the request first", async () => {
+        testApp.prisma.vacationRequest.findUnique.mockResolvedValue({
+          ...buildRequest(),
+          user: buildUser(),
+        });
+        testApp.prisma.vacationRequest.updateMany.mockResolvedValue({
+          count: 0,
+        });
+
+        await http()
+          .patch(`/api/vacations/request-1/${action}`)
+          .set(asAdmin())
+          .send({})
+          .expect(409);
       });
 
       it("returns 400 for a comment over 500 characters", async () => {

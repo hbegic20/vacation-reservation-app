@@ -2,7 +2,7 @@ import { StatusBadge } from '@/components/ui/badge';
 import { Avatar } from '@/components/ui/avatar';
 import { formatDateRange, formatLongDate } from '@/lib/dates';
 import { absenceTypeLabels } from '@/lib/labels';
-import { plural } from '@/lib/people';
+import { fullName, plural } from '@/lib/people';
 import { DayRequests } from './calendar-day';
 
 interface DayDetailsProps {
@@ -30,7 +30,7 @@ export function DayDetails({ selectedDate, requests, holidayName }: DayDetailsPr
                 <Avatar firstName={request.user.firstName} lastName={request.user.lastName} seed={request.userId} />
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold">
-                    {request.user.firstName} {request.user.lastName}
+                    {fullName(request.user)}
                   </p>
                   <p className="text-[13px] text-muted-foreground">
                     {request.user.department ?? 'No department'}
@@ -47,7 +47,7 @@ export function DayDetails({ selectedDate, requests, holidayName }: DayDetailsPr
                 <p>
                   Covered by{' '}
                   <span className="font-semibold">
-                    {request.coverUser.firstName} {request.coverUser.lastName}
+                    {fullName(request.coverUser)}
                   </span>
                 </p>
               ) : null}

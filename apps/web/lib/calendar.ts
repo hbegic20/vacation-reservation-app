@@ -1,3 +1,5 @@
+import { isWeekendKey } from './dates';
+
 export const weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const monthFormatter = new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' });
@@ -20,9 +22,8 @@ export function monthCells({ year, monthIndex }: MonthRef): (CalendarCell | null
   const leadingBlanks = (first.getUTCDay() + 6) % 7;
   const cells: (CalendarCell | null)[] = Array.from({ length: leadingBlanks }, () => null);
   for (let day = 1; day <= daysInMonth; day += 1) {
-    const date = new Date(Date.UTC(year, monthIndex, day));
-    const weekday = date.getUTCDay();
-    cells.push({ key: date.toISOString().slice(0, 10), day, isWeekend: weekday === 0 || weekday === 6 });
+    const key = new Date(Date.UTC(year, monthIndex, day)).toISOString().slice(0, 10);
+    cells.push({ key, day, isWeekend: isWeekendKey(key) });
   }
   return cells;
 }

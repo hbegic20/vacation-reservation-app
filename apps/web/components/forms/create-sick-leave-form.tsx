@@ -10,6 +10,7 @@ import { Input } from '../ui/input';
 import { Select } from '../ui/select';
 import { Textarea } from '../ui/textarea';
 import { useResetOnSuccess } from './use-reset-on-success';
+import { fullName } from '@/lib/people';
 
 const initialState = { success: false, error: null as string | null };
 
@@ -36,7 +37,7 @@ export function CreateSickLeaveForm({ employees }: { employees: EmployeeListItem
           </option>
           {activeEmployees.map((employee) => (
             <option key={employee.id} value={employee.id}>
-              {employee.firstName} {employee.lastName}
+              {fullName(employee)}
               {employee.department ? ` · ${employee.department}` : ''}
             </option>
           ))}

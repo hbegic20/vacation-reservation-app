@@ -16,7 +16,7 @@ This file applies to this repo only. Ignore the SpeedCoach `CLAUDE.md` in the pa
 
 npm workspaces monorepo, Node 20+.
 
-- `apps/web`: Next.js 14 App Router, React 18, TypeScript strict, Tailwind CSS, Server Components + Server Actions, `next-themes`, `date-fns`, `gsap`, `lucide-react`. Port 3000.
+- `apps/web`: Next.js 14 App Router, React 18, TypeScript strict, Tailwind CSS, Server Components + Server Actions, `next-themes`. Dates use native `Intl` and the helpers in `lib/`. Port 3000.
 - `apps/api`: NestJS 10, Prisma 5, PostgreSQL 16, JWT (passport-jwt), bcrypt, class-validator DTOs. Port 4000, all routes under `/api`.
 - `packages/shared`: TypeScript types shared by web and api (`@vacation/shared`, consumed through a tsconfig path, type-only).
 

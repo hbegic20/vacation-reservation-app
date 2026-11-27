@@ -11,6 +11,22 @@ import { CreateEmployeeDto } from "./dto/create-employee.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { UpdateEmployeeDto } from "./dto/update-employee.dto";
 
+const adminFields = {
+  id: true,
+  email: true,
+  firstName: true,
+  lastName: true,
+  department: true,
+  createdAt: true,
+} as const;
+
+const employeeFields = {
+  ...adminFields,
+  isActive: true,
+  vacationDaysTotal: true,
+  vacationDaysUsed: true,
+} as const;
+
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -47,17 +63,7 @@ export class UsersService {
         isActive: true,
         mustChangePassword: true,
       },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        department: true,
-        isActive: true,
-        vacationDaysTotal: true,
-        vacationDaysUsed: true,
-        createdAt: true,
-      },
+      select: employeeFields,
     });
 
     return {
@@ -84,28 +90,14 @@ export class UsersService {
         isActive: true,
         mustChangePassword: true,
       },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        department: true,
-        createdAt: true,
-      },
+      select: adminFields,
     });
   }
 
   async listAdmins() {
     return this.prisma.user.findMany({
       where: { role: UserRole.ADMIN },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        department: true,
-        createdAt: true,
-      },
+      select: adminFields,
       orderBy: { createdAt: "asc" },
     });
   }
@@ -131,17 +123,7 @@ export class UsersService {
   async getEmployeeById(id: string) {
     const employee = await this.prisma.user.findFirst({
       where: { id, role: UserRole.EMPLOYEE },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        department: true,
-        isActive: true,
-        vacationDaysTotal: true,
-        vacationDaysUsed: true,
-        createdAt: true,
-      },
+      select: employeeFields,
     });
 
     if (!employee) {
@@ -169,18 +151,8 @@ export class UsersService {
   }
 
   async updateEmployee(id: string, dto: UpdateEmployeeDto) {
-    await this.getEmployeeById(id);
-
-    const used = await this.prisma.user.findUnique({
-      where: { id },
-      select: { vacationDaysUsed: true },
-    });
-
-    if (!used) {
-      throw new NotFoundException("Employee not found");
-    }
-
-    const total = Math.max(dto.vacationDaysTotal, used.vacationDaysUsed);
+    const employee = await this.getEmployeeById(id);
+    const total = Math.max(dto.vacationDaysTotal, employee.vacationDaysUsed);
 
     return this.prisma.user.update({
       where: { id },
@@ -191,17 +163,7 @@ export class UsersService {
         isActive: dto.isActive,
         vacationDaysTotal: total,
       },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        department: true,
-        isActive: true,
-        vacationDaysTotal: true,
-        vacationDaysUsed: true,
-        createdAt: true,
-      },
+      select: employeeFields,
     });
   }
 
@@ -222,17 +184,7 @@ export class UsersService {
   async listEmployees() {
     const employees = await this.prisma.user.findMany({
       where: { role: UserRole.EMPLOYEE },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        department: true,
-        isActive: true,
-        vacationDaysTotal: true,
-        vacationDaysUsed: true,
-        createdAt: true,
-      },
+      select: employeeFields,
       orderBy: { email: "asc" },
     });
 

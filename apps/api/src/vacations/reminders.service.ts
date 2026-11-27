@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { AbsenceType, NotificationType, VacationStatus } from "@prisma/client";
 import { addDays, formatDateRange, toDateKey } from "../common/dates";
+import { fullName } from "../common/names";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -68,7 +69,7 @@ export class RemindersService implements OnModuleInit, OnModuleDestroy {
       }
 
       const handover = request.coverUser
-        ? ` to ${request.coverUser.firstName} ${request.coverUser.lastName}`
+        ? ` to ${fullName(request.coverUser)}`
         : "";
       await this.notificationsService.notifyEmployee(request.userId, {
         type: NotificationType.LEAVE_REMINDER,

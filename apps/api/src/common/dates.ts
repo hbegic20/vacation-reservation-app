@@ -8,25 +8,23 @@ export function startOfUtcDay(date: Date): Date {
   );
 }
 
+export function eachDateKey(startDate: Date, endDate: Date): string[] {
+  const keys: string[] = [];
+  const endKey = toDateKey(endDate);
+  for (let key = toDateKey(startDate); key <= endKey; key = addDays(key, 1)) {
+    keys.push(key);
+  }
+  return keys;
+}
+
 export function countWorkingDays(
   startDate: Date,
   endDate: Date,
   holidayKeys: ReadonlySet<string> = new Set(),
 ): number {
-  const end = startOfUtcDay(endDate);
-  let workingDays = 0;
-  for (
-    let day = startOfUtcDay(startDate);
-    day <= end;
-    day.setUTCDate(day.getUTCDate() + 1)
-  ) {
-    const weekday = day.getUTCDay();
-    const isWeekend = weekday === 0 || weekday === 6;
-    if (!isWeekend && !holidayKeys.has(toDateKey(day))) {
-      workingDays += 1;
-    }
-  }
-  return workingDays;
+  return eachDateKey(startDate, endDate).filter(
+    (key) => !isWeekendKey(key) && !holidayKeys.has(key),
+  ).length;
 }
 
 const dateFormatter = new Intl.DateTimeFormat("en-GB", {

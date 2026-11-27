@@ -5,7 +5,7 @@ import { StatusBadge } from '@/components/ui/badge';
 import { daysSince } from '@/lib/absences';
 import { formatDate, formatDateRange } from '@/lib/dates';
 import { absenceTypeLabels } from '@/lib/labels';
-import { plural, requesterName } from '@/lib/people';
+import { fullName, plural, requesterName } from '@/lib/people';
 
 interface RequestReviewCardProps {
   request: VacationRequest;
@@ -64,7 +64,7 @@ function RequestSummary({ request }: { request: VacationRequest }) {
         <p className="text-sm text-muted-foreground">“{request.reason}”</p>
         {request.coverUser ? (
           <p className="text-sm">
-            Cover: <span className="font-semibold">{request.coverUser.firstName} {request.coverUser.lastName}</span>
+            Cover: <span className="font-semibold">{fullName(request.coverUser)}</span>
           </p>
         ) : null}
         {!isPending && request.adminComment ? (

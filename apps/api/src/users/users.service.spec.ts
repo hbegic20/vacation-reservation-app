@@ -109,9 +109,11 @@ describe("UsersService", () => {
   });
 
   it("never lowers the allowance below the days already used", async () => {
-    prisma.user.findFirst.mockResolvedValue({ id: "employee-1" });
+    prisma.user.findFirst.mockResolvedValue({
+      id: "employee-1",
+      vacationDaysUsed: 12,
+    });
     prisma.vacationRequest.count.mockResolvedValue(0);
-    prisma.user.findUnique.mockResolvedValue({ vacationDaysUsed: 12 });
     prisma.user.update.mockResolvedValue({ id: "employee-1" });
 
     await usersService.updateEmployee("employee-1", {

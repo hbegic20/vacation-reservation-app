@@ -1,5 +1,6 @@
 import { VacationRequest, VacationStatus } from '@vacation/shared';
 import { toDateKey } from './dates';
+import { fullName } from './people';
 
 const millisecondsPerDay = 86_400_000;
 
@@ -48,7 +49,7 @@ export function overlappingTeammates(request: VacationRequest, requests: Vacatio
         other.user?.department === department &&
         overlapsRange(other, toDateKey(request.startDate), toDateKey(request.endDate))
     )
-    .map((other) => (other.user ? `${other.user.firstName} ${other.user.lastName}` : other.userId));
+    .map((other) => (other.user ? fullName(other.user) : other.userId));
 
   return Array.from(new Set(names));
 }

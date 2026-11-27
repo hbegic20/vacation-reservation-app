@@ -1,10 +1,10 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
-import { API_URL } from './config';
+import { fetchCurrentUser } from './api';
 import { AuthUser } from '@vacation/shared';
 
-export const getToken = cache(() => cookies().get('access_token')?.value ?? null);
+const getToken = cache(() => cookies().get('access_token')?.value ?? null);
 
 export function requireToken(): string {
   const token = getToken();
@@ -21,16 +21,7 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
     return null;
   }
 
-  const response = await fetch(`${API_URL}/me`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store'
-  });
-
-  if (!response.ok) {
-    return null;
-  }
-
-  return response.json();
+  return fetchCurrentUser(token);
 });
 
 export const changePasswordPath = '/account/password';

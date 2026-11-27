@@ -1,4 +1,5 @@
 import {
+  AuthUser,
   DocumentItem,
   BridgeSuggestion,
   PersonSummary,
@@ -50,6 +51,40 @@ export class ApiError extends Error {
   }
 }
 
+type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+
+interface RequestOptions {
+  method?: HttpMethod;
+  body?: FormData | object;
+}
+
+type Success = { success: boolean };
+
+function apiPath(strings: TemplateStringsArray, ...values: Array<string | number | boolean>): string {
+  return strings.reduce(
+    (path, part, index) =>
+      path + part + (index < values.length ? encodeURIComponent(String(values[index])) : ''),
+    ''
+  );
+}
+
+function encodeBody(body: RequestOptions['body']): Pick<RequestInit, 'body'> & { headers: HeadersInit } {
+  if (body === undefined || body instanceof FormData) {
+    return { body, headers: {} };
+  }
+  return { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } };
+}
+
+function send(token: string, path: string, { method = 'GET', body }: RequestOptions = {}) {
+  const encoded = encodeBody(body);
+  return fetch(`${API_URL}${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${token}`, ...encoded.headers },
+    body: encoded.body,
+    cache: 'no-store'
+  });
+}
+
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const errorText = await response.text();
@@ -59,7 +94,8 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function parseJson<T>(response: Response): Promise<T> {
+async function apiRequest<T>(token: string, path: string, options?: RequestOptions): Promise<T> {
+  const response = await send(token, path, options);
   if (response.status === 401) {
     redirect('/login');
   }
@@ -78,289 +114,132 @@ export async function loginRequest(email: string, password: string) {
   return parseResponse<LoginResponse>(response);
 }
 
-export async function fetchSummary(token: string) {
-  const response = await fetch(`${API_URL}/vacations/summary`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store'
-  });
-
-  return parseJson<DashboardSummaryResponse>(response);
+export async function fetchCurrentUser(token: string): Promise<AuthUser | null> {
+  const response = await send(token, '/me');
+  return response.ok ? (response.json() as Promise<AuthUser>) : null;
 }
 
-export async function fetchVacations(token: string) {
-  const response = await fetch(`${API_URL}/vacations`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store'
-  });
-
-  return parseJson<VacationRequest[]>(response);
+export function fetchSummary(token: string) {
+  return apiRequest<DashboardSummaryResponse>(token, '/vacations/summary');
 }
 
-export async function createVacationRequest(
-  token: string,
-  payload: CreateVacationRequestPayload
-) {
-  const response = await fetch(`${API_URL}/vacations`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify(payload)
-  });
-
-  return parseJson<VacationRequest>(response);
+export function fetchVacations(token: string) {
+  return apiRequest<VacationRequest[]>(token, '/vacations');
 }
 
-export async function updateVacationStatus(
+export function createVacationRequest(token: string, payload: CreateVacationRequestPayload) {
+  return apiRequest<VacationRequest>(token, '/vacations', { method: 'POST', body: payload });
+}
+
+export function updateVacationStatus(
   token: string,
   requestId: string,
   action: 'approve' | 'reject',
   payload: UpdateVacationStatusPayload
 ) {
-  const response = await fetch(`${API_URL}/vacations/${requestId}/${action}`, {
+  return apiRequest<VacationRequest>(token, apiPath`/vacations/${requestId}/${action}`, {
     method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify(payload)
+    body: payload
   });
-
-  return parseJson<VacationRequest>(response);
 }
 
-export async function fetchEmployees(token: string) {
-  const response = await fetch(`${API_URL}/admin/employees`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store'
-  });
-
-  return parseJson<EmployeeListItem[]>(response);
+export function fetchEmployees(token: string) {
+  return apiRequest<EmployeeListItem[]>(token, '/admin/employees');
 }
 
-export async function createEmployee(token: string, payload: CreateEmployeePayload) {
-  const response = await fetch(`${API_URL}/admin/employees`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify(payload)
-  });
-
-  return parseJson<EmployeeListItem>(response);
+export function createEmployee(token: string, payload: CreateEmployeePayload) {
+  return apiRequest<EmployeeListItem>(token, '/admin/employees', { method: 'POST', body: payload });
 }
 
-export async function fetchEmployeeById(token: string, id: string) {
-  const response = await fetch(`${API_URL}/admin/employees/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store'
-  });
-
-  return parseJson<EmployeeListItem>(response);
+export function fetchEmployeeById(token: string, id: string) {
+  return apiRequest<EmployeeListItem>(token, apiPath`/admin/employees/${id}`);
 }
 
-export async function updateEmployee(token: string, id: string, payload: UpdateEmployeePayload) {
-  const response = await fetch(`${API_URL}/admin/employees/${id}`, {
+export function updateEmployee(token: string, id: string, payload: UpdateEmployeePayload) {
+  return apiRequest<EmployeeListItem>(token, apiPath`/admin/employees/${id}`, {
     method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify(payload)
+    body: payload
   });
-
-  return parseJson<EmployeeListItem>(response);
 }
 
-export async function resetEmployeePassword(
-  token: string,
-  id: string,
-  payload: ResetPasswordPayload
-) {
-  const response = await fetch(`${API_URL}/admin/employees/${id}/reset-password`, {
+export function resetEmployeePassword(token: string, id: string, payload: ResetPasswordPayload) {
+  return apiRequest<{ id: string; email: string }>(token, apiPath`/admin/employees/${id}/reset-password`, {
     method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify(payload)
+    body: payload
   });
-
-  return parseJson<{ id: string; email: string }>(response);
 }
 
-export async function createAdmin(token: string, payload: CreateAdminPayload) {
-  const response = await fetch(`${API_URL}/admin/admins`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify(payload)
-  });
-
-  return parseJson<AdminListItem>(response);
+export function createAdmin(token: string, payload: CreateAdminPayload) {
+  return apiRequest<AdminListItem>(token, '/admin/admins', { method: 'POST', body: payload });
 }
 
-export async function fetchAdmins(token: string) {
-  const response = await fetch(`${API_URL}/admin/admins`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store'
-  });
-
-  return parseJson<AdminListItem[]>(response);
+export function fetchAdmins(token: string) {
+  return apiRequest<AdminListItem[]>(token, '/admin/admins');
 }
 
-export async function createSickLeave(token: string, payload: CreateSickLeavePayload) {
-  const response = await fetch(`${API_URL}/vacations/sick`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify(payload)
-  });
-
-  return parseJson<VacationRequest>(response);
+export function createSickLeave(token: string, payload: CreateSickLeavePayload) {
+  return apiRequest<VacationRequest>(token, '/vacations/sick', { method: 'POST', body: payload });
 }
 
-export async function fetchVacationCalendar(token: string, year: number) {
-  const response = await fetch(`${API_URL}/vacations/calendar?year=${year}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store'
-  });
-
-  return parseJson<VacationCalendarDay[]>(response);
+export function fetchVacationCalendar(token: string, year: number) {
+  return apiRequest<VacationCalendarDay[]>(token, apiPath`/vacations/calendar?year=${year}`);
 }
 
-export async function fetchNotifications(token: string, unreadOnly = false) {
-  const response = await fetch(`${API_URL}/notifications?unreadOnly=${unreadOnly}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store'
-  });
-
-  return parseJson<NotificationItem[]>(response);
+export function fetchNotifications(token: string, unreadOnly = false) {
+  return apiRequest<NotificationItem[]>(token, apiPath`/notifications?unreadOnly=${unreadOnly}`);
 }
 
-export async function fetchUnreadNotificationCount(token: string) {
-  const response = await fetch(`${API_URL}/notifications/unread-count`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store'
-  });
-
-  return parseJson<{ unread: number }>(response);
+export function fetchUnreadNotificationCount(token: string) {
+  return apiRequest<{ unread: number }>(token, '/notifications/unread-count');
 }
 
-export async function markNotificationRead(token: string, notificationId: string) {
-  const response = await fetch(`${API_URL}/notifications/${notificationId}/read`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}` }
+export function markNotificationRead(token: string, notificationId: string) {
+  return apiRequest<NotificationItem>(token, apiPath`/notifications/${notificationId}/read`, {
+    method: 'PATCH'
   });
-
-  return parseJson<NotificationItem>(response);
 }
 
-export async function markAllNotificationsRead(token: string) {
-  const response = await fetch(`${API_URL}/notifications/read-all`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}` }
-  });
-
-  return parseJson<{ success: boolean }>(response);
+export function markAllNotificationsRead(token: string) {
+  return apiRequest<Success>(token, '/notifications/read-all', { method: 'PATCH' });
 }
 
-export async function cancelVacationRequest(token: string, requestId: string) {
-  const response = await fetch(`${API_URL}/vacations/${requestId}/cancel`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}` }
-  });
-
-  return parseJson<VacationRequest>(response);
+export function cancelVacationRequest(token: string, requestId: string) {
+  return apiRequest<VacationRequest>(token, apiPath`/vacations/${requestId}/cancel`, { method: 'PATCH' });
 }
 
-export async function fetchTeamAbsences(token: string, from: string, to: string) {
-  const response = await fetch(`${API_URL}/vacations/team?from=${from}&to=${to}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store'
-  });
-
-  return parseJson<TeamAbsence[]>(response);
+export function fetchTeamAbsences(token: string, from: string, to: string) {
+  return apiRequest<TeamAbsence[]>(token, apiPath`/vacations/team?from=${from}&to=${to}`);
 }
 
-export async function fetchHolidays(token: string, year: number) {
-  const response = await fetch(`${API_URL}/holidays?year=${year}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store'
-  });
-
-  return parseJson<PublicHoliday[]>(response);
+export function fetchHolidays(token: string, year: number) {
+  return apiRequest<PublicHoliday[]>(token, apiPath`/holidays?year=${year}`);
 }
 
-export async function createHoliday(token: string, payload: CreateHolidayPayload) {
-  const response = await fetch(`${API_URL}/holidays`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify(payload)
-  });
-
-  return parseJson<PublicHoliday>(response);
+export function createHoliday(token: string, payload: CreateHolidayPayload) {
+  return apiRequest<PublicHoliday>(token, '/holidays', { method: 'POST', body: payload });
 }
 
-export async function deleteHoliday(token: string, holidayId: string) {
-  const response = await fetch(`${API_URL}/holidays/${holidayId}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` }
-  });
-
-  return parseJson<{ success: boolean }>(response);
+export function deleteHoliday(token: string, holidayId: string) {
+  return apiRequest<Success>(token, apiPath`/holidays/${holidayId}`, { method: 'DELETE' });
 }
 
-export async function changePassword(token: string, payload: ChangePasswordPayload) {
-  const response = await fetch(`${API_URL}/auth/change-password`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify(payload)
-  });
-
-  return parseJson<{ success: boolean }>(response);
+export function changePassword(token: string, payload: ChangePasswordPayload) {
+  return apiRequest<Success>(token, '/auth/change-password', { method: 'POST', body: payload });
 }
 
-export async function fetchBridgeSuggestions(token: string) {
-  const response = await fetch(`${API_URL}/vacations/suggestions`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store'
-  });
-
-  return parseJson<BridgeSuggestion[]>(response);
+export function fetchBridgeSuggestions(token: string) {
+  return apiRequest<BridgeSuggestion[]>(token, '/vacations/suggestions');
 }
 
-export async function fetchTeamMembers(token: string) {
-  const response = await fetch(`${API_URL}/vacations/team/members`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store'
-  });
-
-  return parseJson<PersonSummary[]>(response);
+export function fetchTeamMembers(token: string) {
+  return apiRequest<PersonSummary[]>(token, '/vacations/team/members');
 }
 
-export async function fetchDocuments(token: string) {
-  const response = await fetch(`${API_URL}/documents`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store'
-  });
-
-  return parseJson<DocumentItem[]>(response);
+export function fetchDocuments(token: string) {
+  return apiRequest<DocumentItem[]>(token, '/documents');
 }
 
-export async function uploadDocument(token: string, upload: { title: string; description: string; file: File }) {
+export function uploadDocument(token: string, upload: { title: string; description: string; file: File }) {
   const body = new FormData();
   body.set('title', upload.title);
   if (upload.description) {
@@ -368,41 +247,21 @@ export async function uploadDocument(token: string, upload: { title: string; des
   }
   body.set('file', upload.file, upload.file.name);
 
-  const response = await fetch(`${API_URL}/documents`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body
-  });
-
-  return parseJson<DocumentItem>(response);
+  return apiRequest<DocumentItem>(token, '/documents', { method: 'POST', body });
 }
 
-export async function updateDocument(token: string, documentId: string, changes: { isPublished: boolean }) {
-  const response = await fetch(`${API_URL}/documents/${documentId}`, {
+export function updateDocument(token: string, documentId: string, changes: { isPublished: boolean }) {
+  return apiRequest<DocumentItem>(token, apiPath`/documents/${documentId}`, {
     method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify(changes)
+    body: changes
   });
-
-  return parseJson<DocumentItem>(response);
 }
 
-export async function deleteDocument(token: string, documentId: string) {
-  const response = await fetch(`${API_URL}/documents/${documentId}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` }
-  });
-
-  return parseJson<{ success: boolean }>(response);
+export function deleteDocument(token: string, documentId: string) {
+  return apiRequest<Success>(token, apiPath`/documents/${documentId}`, { method: 'DELETE' });
 }
 
 export function fetchDocumentFile(token: string, documentId: string, download: boolean) {
   const query = download ? '?download=1' : '';
-  return fetch(`${API_URL}/documents/${encodeURIComponent(documentId)}/file${query}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store'
-  });
+  return send(token, `${apiPath`/documents/${documentId}/file`}${query}`);
 }

@@ -42,6 +42,15 @@ function utcMidnight(isoDate: string): Date {
   return new Date(`${toDateKey(isoDate)}T00:00:00Z`);
 }
 
+export function isWeekendKey(dateKey: string): boolean {
+  const weekday = new Date(`${dateKey}T00:00:00Z`).getUTCDay();
+  return weekday === 0 || weekday === 6;
+}
+
+export function isWorkingDayKey(dateKey: string, holidayKeys: ReadonlySet<string> = new Set()): boolean {
+  return !isWeekendKey(dateKey) && !holidayKeys.has(dateKey);
+}
+
 export function countWorkingDays(
   startDate: string,
   endDate: string,
@@ -50,9 +59,7 @@ export function countWorkingDays(
   const end = utcMidnight(endDate);
   let workingDays = 0;
   for (let day = utcMidnight(startDate); day <= end; day.setUTCDate(day.getUTCDate() + 1)) {
-    const weekday = day.getUTCDay();
-    const isWeekend = weekday === 0 || weekday === 6;
-    if (!isWeekend && !holidayKeys.has(day.toISOString().slice(0, 10))) {
+    if (isWorkingDayKey(toDateKey(day.toISOString()), holidayKeys)) {
       workingDays += 1;
     }
   }
@@ -61,8 +68,7 @@ export function countWorkingDays(
 
 export function daysUntil(isoDate: string, today: Date = new Date()): number {
   const millisecondsPerDay = 86_400_000;
-  const todayKey = today.toISOString().slice(0, 10);
-  return Math.round((utcMidnight(isoDate).getTime() - utcMidnight(todayKey).getTime()) / millisecondsPerDay);
+  return Math.round((utcMidnight(isoDate).getTime() - utcMidnight(today.toISOString()).getTime()) / millisecondsPerDay);
 }
 
 export function monthShort(isoDate: string): string {

@@ -1,8 +1,36 @@
-import { countWorkingDays, startOfUtcDay, toDateKey } from "./dates";
+import {
+  countWorkingDays,
+  eachDateKey,
+  startOfUtcDay,
+  toDateKey,
+} from "./dates";
 
 function utcDate(isoDate: string): Date {
   return new Date(`${isoDate}T00:00:00.000Z`);
 }
+
+describe("eachDateKey", () => {
+  it("lists every calendar day in the range, both ends included", () => {
+    expect(eachDateKey(utcDate("2026-02-27"), utcDate("2026-03-02"))).toEqual([
+      "2026-02-27",
+      "2026-02-28",
+      "2026-03-01",
+      "2026-03-02",
+    ]);
+  });
+
+  it("returns one key when start and end are the same day", () => {
+    expect(
+      eachDateKey(utcDate("2026-03-09"), new Date("2026-03-09T18:30:00.000Z")),
+    ).toEqual(["2026-03-09"]);
+  });
+
+  it("returns nothing when the end is before the start", () => {
+    expect(eachDateKey(utcDate("2026-03-10"), utcDate("2026-03-09"))).toEqual(
+      [],
+    );
+  });
+});
 
 describe("countWorkingDays", () => {
   it("counts Monday to Friday", () => {

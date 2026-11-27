@@ -87,6 +87,22 @@ describe("AuthService", () => {
     ).rejects.toThrow(new UnauthorizedException("Account is inactive"));
   });
 
+  it("does not reveal an inactive account to someone without its password", async () => {
+    prisma.user.findUnique.mockResolvedValue(
+      buildUser({
+        isActive: false,
+        password: await hash("employee1234", 4),
+      }),
+    );
+
+    await expect(
+      authService.login({
+        email: "john.employee@company.com",
+        password: "wrong-password",
+      }),
+    ).rejects.toThrow(new UnauthorizedException("Invalid credentials"));
+  });
+
   it("tells the client when the user must change a temporary password", async () => {
     prisma.user.findUnique.mockResolvedValue(
       buildUser({

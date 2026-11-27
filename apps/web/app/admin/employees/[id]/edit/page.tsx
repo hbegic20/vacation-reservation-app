@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import { ApiError, fetchEmployeeById } from '@/lib/api';
 import { requireAdmin, requireToken } from '@/lib/auth';
 import { formatDate } from '@/lib/dates';
+import { fullName } from '@/lib/people';
 
 export const metadata: Metadata = { title: 'Edit employee' };
 
@@ -37,7 +38,7 @@ export default async function EditEmployeePage({ params }: EditEmployeePageProps
   return (
     <PageShell user={user} width="narrow">
       <PageHeader
-        title={`${employee.firstName} ${employee.lastName}`}
+        title={fullName(employee)}
         back={{ href: '/admin/employees', label: 'Back to employees' }}
       />
       <div className="-mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">

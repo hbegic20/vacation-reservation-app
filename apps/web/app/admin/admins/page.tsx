@@ -6,7 +6,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { fetchAdmins } from '@/lib/api';
 import { requireAdmin, requireToken } from '@/lib/auth';
 import { formatDate } from '@/lib/dates';
-import { plural } from '@/lib/people';
+import { fullName, plural } from '@/lib/people';
 
 export const metadata: Metadata = { title: 'Admins' };
 
@@ -35,7 +35,7 @@ export default async function AdminsPage() {
                 <Avatar firstName={admin.firstName} lastName={admin.lastName} seed={admin.id} />
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold">
-                    {admin.firstName} {admin.lastName}
+                    {fullName(admin)}
                     {admin.id === user.id ? <span className="font-normal text-muted-foreground"> (you)</span> : null}
                   </p>
                   <p className="truncate text-[13px] text-muted-foreground">{admin.email}</p>

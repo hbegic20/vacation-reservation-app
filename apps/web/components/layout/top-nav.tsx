@@ -4,6 +4,7 @@ import { logoutAction } from '@/app/actions';
 import { Icon } from '@/components/ui/icon';
 import { fetchSummary, fetchUnreadNotificationCount } from '@/lib/api';
 import { changePasswordPath, requireToken } from '@/lib/auth';
+import { fullName } from '@/lib/people';
 import { navItemsFor } from './nav-items';
 import { DesktopNavLinks, MobileTabBar } from './nav-links';
 import { NotificationsBell } from './notifications-bell';
@@ -47,11 +48,11 @@ export async function TopNav({ user }: { user: AuthUser }) {
             <ThemeToggle />
             <Link
               href={changePasswordPath}
-              aria-label={`Account settings for ${user.firstName} ${user.lastName}`}
+              aria-label={`Account settings for ${fullName(user)}`}
               className="flex min-h-11 items-center gap-2.5 rounded-xl border border-border p-1 transition-colors hover:bg-muted sm:pl-3"
             >
               <span className="hidden text-sm font-semibold text-foreground sm:inline">
-                {user.firstName} {user.lastName}
+                {fullName(user)}
               </span>
               <span
                 aria-hidden="true"

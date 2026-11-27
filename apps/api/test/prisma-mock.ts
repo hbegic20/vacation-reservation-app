@@ -3,6 +3,7 @@ import { PrismaService } from "../src/prisma/prisma.service";
 function modelMock() {
   return {
     findUnique: jest.fn(),
+    findUniqueOrThrow: jest.fn(),
     findFirst: jest.fn(),
     findMany: jest.fn(),
     create: jest.fn(),

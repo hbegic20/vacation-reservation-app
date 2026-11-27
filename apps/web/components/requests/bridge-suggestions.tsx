@@ -11,7 +11,7 @@ function leaveLabel(suggestion: BridgeSuggestion): string {
     : formatDateRange(suggestion.leaveStart, suggestion.leaveEnd);
 }
 
-export function requestHref(startDate: string, endDate: string): string {
+function requestHref(startDate: string, endDate: string): string {
   return `/vacations/request?start=${startDate}&end=${endDate}`;
 }
 

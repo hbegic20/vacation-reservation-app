@@ -20,7 +20,7 @@ import {
   monthYearLabel,
   parseMonthQuery
 } from '@/lib/calendar';
-import { toDateKey } from '@/lib/dates';
+import { isWorkingDayKey, toDateKey } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Calendar' };
@@ -89,11 +89,6 @@ function periodKeysOf(view: CalendarView, month: MonthRef): Set<string> {
   return new Set(months.flatMap((period) => monthCells(period).flatMap((cell) => (cell ? [cell.key] : []))));
 }
 
-function isWorkingDay(dateKey: string, holidayKeys: ReadonlySet<string>): boolean {
-  const weekday = new Date(`${dateKey}T00:00:00Z`).getUTCDay();
-  return weekday !== 0 && weekday !== 6 && !holidayKeys.has(dateKey);
-}
-
 function periodStats(
   days: VacationCalendarDay[],
   periodKeys: ReadonlySet<string>,
@@ -111,7 +106,7 @@ function periodStats(
     if (!periodKeys.has(day.date)) {
       continue;
     }
-    const countsAsWorkingDay = isWorkingDay(day.date, holidayKeys);
+    const countsAsWorkingDay = isWorkingDayKey(day.date, holidayKeys);
     for (const request of people) {
       const kind = kindOf(request);
       if (kind === 'pending') {

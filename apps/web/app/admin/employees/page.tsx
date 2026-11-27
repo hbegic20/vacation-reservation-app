@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { fetchEmployees } from '@/lib/api';
 import { requireAdmin, requireToken } from '@/lib/auth';
-import { plural } from '@/lib/people';
+import { fullName, plural } from '@/lib/people';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Employees' };
@@ -39,10 +39,6 @@ function parseSort(value: string | undefined): SortOption {
 
 function daysLeft(employee: EmployeeListItem): number {
   return employee.vacationDaysTotal - employee.vacationDaysUsed;
-}
-
-function fullName(employee: EmployeeListItem): string {
-  return `${employee.firstName} ${employee.lastName}`;
 }
 
 const comparators: Record<SortOption, (a: EmployeeListItem, b: EmployeeListItem) => number> = {

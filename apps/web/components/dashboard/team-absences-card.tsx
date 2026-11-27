@@ -3,6 +3,7 @@ import { TeamAbsence } from '@vacation/shared';
 import { Avatar } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { formatDateRange } from '@/lib/dates';
+import { fullName } from '@/lib/people';
 
 interface TeamAbsencesCardProps {
   department: string | null;
@@ -38,7 +39,7 @@ export function TeamAbsencesCard({ department, absences }: TeamAbsencesCardProps
               />
               <div className="min-w-0">
                 <p className="text-sm font-semibold">
-                  {absence.person.firstName} {absence.person.lastName}
+                  {fullName(absence.person)}
                 </p>
                 <p className="text-[13px] text-muted-foreground">
                   Away {formatDateRange(absence.startDate, absence.endDate)}

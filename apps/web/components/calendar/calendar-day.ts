@@ -1,12 +1,13 @@
 import { AbsenceType, VacationCalendarRequestItem, VacationStatus } from '@vacation/shared';
 import { isActiveAbsence } from '@/lib/absences';
 import { formatLongDate } from '@/lib/dates';
+import { fullName } from '@/lib/people';
 
 export type DayRequests = VacationCalendarRequestItem[];
 
 export type AbsenceKind = 'sick' | 'vacation' | 'pending';
 
-export type EntryKind = AbsenceKind | 'away';
+type EntryKind = AbsenceKind | 'away';
 
 export interface CalendarEntry {
   id: string;
@@ -44,7 +45,7 @@ export function dominantKind(requests: DayRequests): AbsenceKind | null {
   return kindPriority.find((kind) => kinds.has(kind)) ?? null;
 }
 
-export function shortName(request: VacationCalendarRequestItem): string {
+function shortName(request: VacationCalendarRequestItem): string {
   return `${request.user.firstName} ${request.user.lastName.charAt(0)}.`;
 }
 
@@ -54,7 +55,7 @@ export function entriesFromRequests(requests: DayRequests): CalendarEntry[] {
     return {
       id: request.id,
       label: shortName(request),
-      description: `${request.user.firstName} ${request.user.lastName} (${kindStyles[kind].label})`,
+      description: `${fullName(request.user)} (${kindStyles[kind].label})`,
       kind
     };
   });
